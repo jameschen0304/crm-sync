@@ -23,6 +23,7 @@ const HOLIDAYS_MMDD = new Set([
 const REGION_ORDER = ["东南亚", "南亚", "欧美澳", "中东", "中亚", "非洲", "中南美"];
 const DAILY_SETTINGS_KEY = "crm_daily_settings";
 const LOCAL_DATA_KEY = "crm_companies_local_v1";
+const AUTO_SEED_FLAG_KEY = "crm_seed_imported_v1";
 let USE_LOCAL_MODE = window.location.protocol === "file:";
 
 // 选择国家后自动填默认时区（IANA）
@@ -1139,6 +1140,28 @@ function localDeleteCompany(id) {
   return { ok: true };
 }
 
+async function tryAutoSeedFromHostedJSON() {
+  const alreadySeeded = localStorage.getItem(AUTO_SEED_FLAG_KEY) === "1";
+  if (alreadySeeded && localListCompanies().length > 0) return false;
+  if (localListCompanies().length > 0) {
+    localStorage.setItem(AUTO_SEED_FLAG_KEY, "1");
+    return false;
+  }
+  try {
+    const res = await fetch("./crm-recovered-data.json?v=20260331b");
+    if (!res.ok) return false;
+    const data = await res.json();
+    const rows = Array.isArray(data) ? data : data?.rows;
+    const normalized = normalizeImportedRows(rows);
+    if (!normalized.length) return false;
+    localSaveCompanies(normalized);
+    localStorage.setItem(AUTO_SEED_FLAG_KEY, "1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeImportedRows(rows) {
   if (!Array.isArray(rows)) return [];
   const now = new Date().toISOString();
@@ -1203,8 +1226,10 @@ async function refresh() {
   } catch (e) {
     // 无法连接后端时，自动切换离线 HTML 模式，方便在其他电脑直接使用
     USE_LOCAL_MODE = true;
+    const seeded = await tryAutoSeedFromHostedJSON();
     companies = localListCompanies();
-    setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
+    if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
+    else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
     renderList();
     startReminderLoop(60000);
   }
