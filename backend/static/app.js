@@ -1139,6 +1139,60 @@ function localDeleteCompany(id) {
   return { ok: true };
 }
 
+function normalizeImportedRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  const now = new Date().toISOString();
+  const out = [];
+  let nextId = 1;
+  for (const item of rows) {
+    if (!item || typeof item !== "object") continue;
+    const row = { ...item };
+    row.id = Number(row.id) > 0 ? Number(row.id) : nextId;
+    row.created_at = row.created_at || now;
+    row.updated_at = now;
+    if (!row.name || !row.timezone) continue;
+    out.push(row);
+    nextId = Math.max(nextId, row.id + 1);
+  }
+  return out;
+}
+
+function exportLocalData() {
+  const rows = localListCompanies();
+  const payload = {
+    exported_at: new Date().toISOString(),
+    version: 1,
+    rows,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `crm-data-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  setMsg(`导出完成，共 ${rows.length} 条客户。`, "ok");
+}
+
+async function importLocalDataFromFile(file) {
+  const text = await file.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("JSON 格式不正确");
+  }
+  const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
+  const normalized = normalizeImportedRows(rows);
+  if (!normalized.length) throw new Error("文件中没有可导入的数据");
+  localSaveCompanies(normalized);
+  companies = localListCompanies();
+  renderList();
+  setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
+}
+
 async function refresh() {
   try {
     companies = await apiGet("/api/companies");
@@ -1161,6 +1215,19 @@ q("btnEnableNotif").addEventListener("click", async () => {
   setMsg(ok ? "系统通知已开启（或已授权）。" : "系统通知未授权，将使用弹窗提醒。", ok ? "ok" : "error");
 });
 q("btnRefresh").addEventListener("click", refresh);
+q("btnExportData").addEventListener("click", exportLocalData);
+q("btnImportData").addEventListener("click", () => q("importDataFile").click());
+q("importDataFile").addEventListener("change", async (ev) => {
+  const file = ev.target.files?.[0];
+  ev.target.value = "";
+  if (!file) return;
+  try {
+    USE_LOCAL_MODE = true;
+    await importLocalDataFromFile(file);
+  } catch (e) {
+    setMsg(`导入失败：${String(e?.message || e)}`, "error");
+  }
+});
 q("btnReset").addEventListener("click", () => {
   q("companyForm").reset();
   q("id").value = "";
