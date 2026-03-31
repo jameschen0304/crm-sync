@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM（公司）- 上班时间提醒</title>
-    <link rel="stylesheet" href="./styles.css?v=20260331a" />
+    <link rel="stylesheet" href="./styles.css?v=20260331b" />
   </head>
   <body>
     <main class="wrap">
@@ -115,6 +115,32 @@
                 </div>
               </aside>
             </div>
+          </section>
+
+          <section class="panel">
+            <h2>每日 To-Do</h2>
+            <form id="todoForm" class="todo-form">
+              <input id="todoText" class="input" maxlength="160" placeholder="输入今天要完成的任务..." required />
+              <input id="todoDueDate" class="input" type="date" />
+              <select id="todoPriority" class="select">
+                <option value="high">高优先级</option>
+                <option value="medium" selected>中优先级</option>
+                <option value="low">低优先级</option>
+              </select>
+              <button id="btnTodoAdd" class="btn" type="submit">添加任务</button>
+            </form>
+            <div class="todo-toolbar">
+              <select id="todoFilter" class="select">
+                <option value="all">全部</option>
+                <option value="pending">待完成</option>
+                <option value="today">今天到期</option>
+                <option value="overdue">已逾期</option>
+                <option value="done">已完成</option>
+              </select>
+              <button id="btnTodoClearDone" class="btn btn-secondary" type="button">清除已完成</button>
+            </div>
+            <div id="todoStats" class="sub"></div>
+            <div id="todoList" class="todo-list"></div>
           </section>
 
           <section id="editPanel" class="panel">
@@ -274,6 +300,6 @@
       </section>
     </main>
 
-    <script src="./app.js?v=20260331a"></script>
+    <script src="./app.js?v=20260331b"></script>
   </body>
 </html>

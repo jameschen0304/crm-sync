@@ -24,6 +24,7 @@ const REGION_ORDER = ["东南亚", "南亚", "欧美澳", "中东", "中亚", "�
 const DAILY_SETTINGS_KEY = "crm_daily_settings";
 const LOCAL_DATA_KEY = "crm_companies_local_v1";
 const AUTO_SEED_FLAG_KEY = "crm_seed_imported_v1";
+const TODO_DATA_KEY = "crm_todo_items_v1";
 let USE_LOCAL_MODE = window.location.protocol === "file:";
 
 // 选择国家后自动填默认时区（IANA）
@@ -370,13 +371,8 @@ async function enableNotifications() {
 }
 
 function notify(company) {
-  const body = `${company.name} 已进入上班时间（${WORK_START}–${WORK_END}）`;
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification("客户上班时间开始了", { body });
-  } else {
-    // 可替换为更好看的 toast
-    alert(body);
-  }
+  // 已按需求关闭“客户上班时间”通知
+  void company;
 }
 
 function notifyFollowUp(company, dueAt) {
@@ -395,6 +391,7 @@ const prevWorking = new Map();
 let listViewMode = "detailed";
 const expandedRegions = new Set();
 let currentDetailId = null;
+let todoItems = [];
 
 function loadDailySettings() {
   try {
@@ -416,6 +413,110 @@ function saveDailySettings() {
   localStorage.setItem(DAILY_SETTINGS_KEY, JSON.stringify({ ownerName, dailyTarget }));
   setMsg("已保存每日新增目标设置。", "ok");
   renderList();
+}
+
+function loadTodoItems() {
+  try {
+    const raw = localStorage.getItem(TODO_DATA_KEY);
+    if (!raw) return [];
+    const rows = JSON.parse(raw);
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTodoItems() {
+  localStorage.setItem(TODO_DATA_KEY, JSON.stringify(todoItems));
+}
+
+function getTodayDateStr() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function todoPriorityLabel(priority) {
+  if (priority === "high") return "高优先级";
+  if (priority === "low") return "低优先级";
+  return "中优先级";
+}
+
+function todoStatus(item, todayStr) {
+  if (item.done) return "done";
+  if (!item.due_date) return "pending";
+  if (item.due_date < todayStr) return "overdue";
+  if (item.due_date === todayStr) return "today";
+  return "pending";
+}
+
+function renderTodoList() {
+  const listEl = q("todoList");
+  const statsEl = q("todoStats");
+  if (!listEl || !statsEl) return;
+  const todayStr = getTodayDateStr();
+  const filter = (q("todoFilter")?.value || "all").trim();
+
+  const stats = {
+    total: todoItems.length,
+    done: todoItems.filter((x) => x.done).length,
+    overdue: todoItems.filter((x) => todoStatus(x, todayStr) === "overdue").length,
+    today: todoItems.filter((x) => todoStatus(x, todayStr) === "today").length,
+  };
+  const pending = Math.max(0, stats.total - stats.done);
+  statsEl.textContent = `总计 ${stats.total} · 待办 ${pending} · 今天到期 ${stats.today} · 逾期 ${stats.overdue} · 完成 ${stats.done}`;
+
+  const filtered = todoItems.filter((item) => {
+    const s = todoStatus(item, todayStr);
+    if (filter === "all") return true;
+    if (filter === "pending") return !item.done;
+    if (filter === "done") return item.done;
+    return s === filter;
+  });
+
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="todo-empty">暂无任务，先添加一条吧。</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map((item) => {
+    const s = todoStatus(item, todayStr);
+    const dueText = item.due_date ? `截止：${escapeHtml(item.due_date)}` : "截止：未设置";
+    const statusText = s === "overdue" ? "逾期" : s === "today" ? "今天到期" : item.done ? "已完成" : "待办";
+    return `
+      <div class="todo-item ${item.done ? "done" : ""}">
+        <input class="todo-check" type="checkbox" data-todo-toggle="${item.id}" ${item.done ? "checked" : ""} />
+        <div class="todo-main">
+          <div class="todo-text">${escapeHtml(item.text || "")}</div>
+          <div class="todo-meta">${dueText} · 状态：${statusText} · 创建：${escapeHtml(String(item.created_at || "").slice(0, 10))}</div>
+        </div>
+        <div class="todo-actions">
+          <span class="todo-priority ${item.priority || "medium"}">${todoPriorityLabel(item.priority)}</span>
+          <button class="btn btn-secondary" type="button" data-todo-del="${item.id}">删除</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  listEl.querySelectorAll("[data-todo-toggle]").forEach((el) => {
+    el.addEventListener("change", () => {
+      const id = Number(el.getAttribute("data-todo-toggle"));
+      const row = todoItems.find((x) => Number(x.id) === id);
+      if (!row) return;
+      row.done = !!el.checked;
+      row.updated_at = new Date().toISOString();
+      saveTodoItems();
+      renderTodoList();
+    });
+  });
+  listEl.querySelectorAll("[data-todo-del]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = Number(el.getAttribute("data-todo-del"));
+      todoItems = todoItems.filter((x) => Number(x.id) !== id);
+      saveTodoItems();
+      renderTodoList();
+    });
+  });
 }
 
 function renderEmptyDetail() {
@@ -1261,6 +1362,34 @@ q("btnReset").addEventListener("click", () => {
   q("last_follow_up_note").value = "";
   setMsg("");
 });
+q("todoForm").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const text = q("todoText").value.trim();
+  if (!text) return;
+  const dueDate = (q("todoDueDate").value || "").trim() || null;
+  const priority = (q("todoPriority").value || "medium").trim();
+  const nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
+  const now = new Date().toISOString();
+  todoItems.unshift({
+    id: nextId,
+    text,
+    due_date: dueDate,
+    priority: ["high", "medium", "low"].includes(priority) ? priority : "medium",
+    done: false,
+    created_at: now,
+    updated_at: now,
+  });
+  saveTodoItems();
+  q("todoForm").reset();
+  q("todoPriority").value = "medium";
+  renderTodoList();
+});
+q("todoFilter").addEventListener("change", renderTodoList);
+q("btnTodoClearDone").addEventListener("click", () => {
+  todoItems = todoItems.filter((x) => !x.done);
+  saveTodoItems();
+  renderTodoList();
+});
 
 q("last_won_raw").addEventListener("input", () => {
   // 每次输入都解析一次，但不覆盖你已手动填写的解析字段
@@ -1356,4 +1485,6 @@ q("btnDetailEdit").addEventListener("click", () => {
   const editBtn = document.querySelector(`[data-edit="${currentDetailId}"]`);
   if (editBtn) editBtn.click();
 });
+todoItems = loadTodoItems();
+renderTodoList();
 refresh();
