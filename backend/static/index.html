@@ -59,6 +59,7 @@
             <button id="btnSaveDailySettings" class="btn btn-secondary">保存目标设置</button>
           </div>
           <div class="sidebar-block">
+            <a class="btn btn-secondary" href="./todo.html">打开每日 To-Do 模块</a>
             <div class="view-toggle">
               <button id="btnViewDetailed" class="btn">详细视图</button>
               <button id="btnViewCompact" class="btn btn-secondary">紧凑视图</button>
@@ -115,39 +116,6 @@
                 </div>
               </aside>
             </div>
-          </section>
-
-          <section class="panel">
-            <h2>每日 To-Do</h2>
-            <form id="todoForm" class="todo-form">
-              <input id="todoText" class="input" maxlength="160" placeholder="输入今天要完成的任务..." required />
-              <input id="todoDueDate" class="input" type="date" />
-              <select id="todoRepeat" class="select">
-                <option value="none" selected>不重复</option>
-                <option value="daily">每天</option>
-                <option value="workday">工作日</option>
-                <option value="weekly">每周</option>
-                <option value="monthly">每月</option>
-              </select>
-              <select id="todoPriority" class="select">
-                <option value="high">高优先级</option>
-                <option value="medium" selected>中优先级</option>
-                <option value="low">低优先级</option>
-              </select>
-              <button id="btnTodoAdd" class="btn" type="submit">添加任务</button>
-            </form>
-            <div class="todo-toolbar">
-              <select id="todoFilter" class="select">
-                <option value="all">全部</option>
-                <option value="pending">待完成</option>
-                <option value="today">今天到期</option>
-                <option value="overdue">已逾期</option>
-                <option value="done">已完成</option>
-              </select>
-              <button id="btnTodoClearDone" class="btn btn-secondary" type="button">清除已完成</button>
-            </div>
-            <div id="todoStats" class="sub"></div>
-            <div id="todoList" class="todo-list"></div>
           </section>
 
           <section id="editPanel" class="panel">
