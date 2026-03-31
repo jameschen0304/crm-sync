@@ -22,6 +22,8 @@ const HOLIDAYS_MMDD = new Set([
 ]);
 const REGION_ORDER = ["东南亚", "南亚", "欧美澳", "中东", "中亚", "非洲", "中南美"];
 const DAILY_SETTINGS_KEY = "crm_daily_settings";
+const LOCAL_DATA_KEY = "crm_companies_local_v1";
+let USE_LOCAL_MODE = window.location.protocol === "file:";
 
 // 选择国家后自动填默认时区（IANA）
 // 说明：部分国家跨多个时区，这里填“最常用/首都时区”；你仍可手动改。
@@ -801,6 +803,8 @@ function renderList() {
         }
       }
       const hasLastWon = Boolean(c.last_won_time || c.last_won_product || c.last_won_qty || c.last_won_unit_price || c.last_won_supplier || c.last_won_raw);
+      const followUpHistoryText = (c.follow_up_history || "").trim();
+      const followUpPreview = followUpHistoryText || c.last_follow_up_note || "—";
       return `
         <div class="row">
           <div class="${dotClass}" title="${working ? "上班中" : "非上班时间"}"></div>
@@ -811,9 +815,9 @@ function renderList() {
             <div class="meta">其他链接：${links || "—"}</div>
             <div class="meta">下次跟进：${c.next_follow_up_at ? escapeHtml(new Date(c.next_follow_up_at).toLocaleString()) : "—"} · 最近跟进：${c.last_follow_up_at ? escapeHtml(new Date(c.last_follow_up_at).toLocaleString()) : "—"} · <span class="${followStatusClass}">${followStatus}</span></div>
             <details class="mini-details">
-              <summary>跟进内容（${escapeHtml(c.last_follow_up_channel || "—")}）</summary>
+              <summary>跟进记录（${escapeHtml(c.last_follow_up_channel || "—")}）</summary>
               <div class="mini-details-body">
-                <div class="detail-value">${escapeHtml(c.last_follow_up_note || "—")}</div>
+                <div class="detail-value">${escapeHtml(followUpPreview)}</div>
               </div>
             </details>
           </div>
@@ -1002,6 +1006,7 @@ function renderDetail(c) {
     <div class="detail-item"><div class="detail-label">下次跟进</div><div class="detail-value">${c.next_follow_up_at ? escapeHtml(new Date(c.next_follow_up_at).toLocaleString()) : "—"}</div></div>
     <div class="detail-item"><div class="detail-label">最近跟进渠道</div><div class="detail-value">${escapeHtml(c.last_follow_up_channel || "—")}</div></div>
     <div class="detail-item"><div class="detail-label">最近跟进备注</div><div class="detail-value">${escapeHtml(c.last_follow_up_note || "—")}</div></div>
+    <div class="detail-item"><div class="detail-label">跟进历史</div><div class="detail-value">${escapeHtml((c.follow_up_history || "").trim() || "—").replace(/\n/g, "<br>")}</div></div>
   `;
 }
 
@@ -1018,35 +1023,136 @@ function whatsappToLink(raw) {
 }
 
 async function apiGet(path) {
+  if (USE_LOCAL_MODE) {
+    if (path === "/api/companies") return localListCompanies();
+    throw new Error(`本地模式不支持 GET ${path}`);
+  }
   const res = await fetch(path, { headers: HEADERS });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 async function apiPost(path, body) {
+  if (USE_LOCAL_MODE) {
+    if (path === "/api/companies") return localCreateCompany(body);
+    throw new Error(`本地模式不支持 POST ${path}`);
+  }
   const res = await fetch(path, { method: "POST", headers: HEADERS, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 async function apiPut(path, body) {
+  if (USE_LOCAL_MODE) {
+    const m = String(path).match(/^\/api\/companies\/(\d+)$/);
+    if (!m) throw new Error(`本地模式不支持 PUT ${path}`);
+    return localUpdateCompany(Number(m[1]), body);
+  }
   const res = await fetch(path, { method: "PUT", headers: HEADERS, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 async function apiDelete(path) {
+  if (USE_LOCAL_MODE) {
+    const m = String(path).match(/^\/api\/companies\/(\d+)$/);
+    if (!m) throw new Error(`本地模式不支持 DELETE ${path}`);
+    return localDeleteCompany(Number(m[1]));
+  }
   const res = await fetch(path, { method: "DELETE", headers: HEADERS });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
+function localLoadCompanies() {
+  try {
+    const raw = localStorage.getItem(LOCAL_DATA_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function localSaveCompanies(rows) {
+  localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(rows));
+}
+
+function localListCompanies() {
+  const rows = localLoadCompanies();
+  rows.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  return rows;
+}
+
+function localCreateCompany(payload) {
+  const rows = localLoadCompanies();
+  const name = String(payload.name || "").trim();
+  if (rows.some((r) => String(r.name || "").trim() === name)) {
+    throw new Error("Company name already exists");
+  }
+  const now = new Date().toISOString();
+  const nextId = rows.length ? Math.max(...rows.map((x) => Number(x.id) || 0)) + 1 : 1;
+  const row = { ...payload, id: nextId, created_at: now, updated_at: now };
+  rows.push(row);
+  localSaveCompanies(rows);
+  return row;
+}
+
+function localUpdateCompany(id, payload) {
+  const rows = localLoadCompanies();
+  const idx = rows.findIndex((x) => Number(x.id) === Number(id));
+  if (idx < 0) throw new Error("Not found");
+  const exists = rows.find((x) => Number(x.id) !== Number(id) && String(x.name || "").trim() === String(payload.name || "").trim());
+  if (exists) throw new Error("Company name already exists");
+  const old = rows[idx];
+  const row = {
+    ...old,
+    ...payload,
+    id: Number(id),
+    created_at: old.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const oldFollow = `${old.last_follow_up_at || ""}|${old.last_follow_up_channel || ""}|${old.last_follow_up_note || ""}`;
+  const newFollow = `${row.last_follow_up_at || ""}|${row.last_follow_up_channel || ""}|${row.last_follow_up_note || ""}`;
+  if (oldFollow !== newFollow && row.last_follow_up_at) {
+    const dt = new Date(row.last_follow_up_at);
+    const pad = (n) => String(n).padStart(2, "0");
+    const followTime = Number.isNaN(dt.getTime())
+      ? String(row.last_follow_up_at)
+      : `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+    const followChannel = row.last_follow_up_channel || "未填写渠道";
+    const followNote = row.last_follow_up_note || "（无备注）";
+    const line = `[${followTime}] ${followChannel} | ${followNote}`;
+    row.follow_up_history = row.follow_up_history ? `${row.follow_up_history}\n${line}` : line;
+  }
+
+  rows[idx] = row;
+  localSaveCompanies(rows);
+  return row;
+}
+
+function localDeleteCompany(id) {
+  const rows = localLoadCompanies();
+  const idx = rows.findIndex((x) => Number(x.id) === Number(id));
+  if (idx < 0) throw new Error("Not found");
+  rows.splice(idx, 1);
+  localSaveCompanies(rows);
+  return { ok: true };
+}
+
 async function refresh() {
   try {
     companies = await apiGet("/api/companies");
-    setMsg("");
+    if (USE_LOCAL_MODE) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
+    else setMsg("");
     renderList();
     startReminderLoop(60000);
   } catch (e) {
-    setMsg(`加载失败：请确认 API Key（当前：${API_KEY}）是否一致。`, "error");
-    console.error(e);
+    // 无法连接后端时，自动切换离线 HTML 模式，方便在其他电脑直接使用
+    USE_LOCAL_MODE = true;
+    companies = localListCompanies();
+    setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
+    renderList();
+    startReminderLoop(60000);
   }
 }
 

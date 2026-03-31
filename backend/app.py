@@ -44,6 +44,7 @@ class Company(Base):
     last_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_follow_up_channel: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     last_follow_up_note: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    follow_up_history: Mapped[Optional[str]] = mapped_column(String(8000), nullable=True)
     # 最近成交（结构化字段 + 原始粘贴文本）
     last_won_raw: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     last_won_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -82,6 +83,7 @@ def ensure_schema():
         add("last_follow_up_at", "last_follow_up_at DATETIME")
         add("last_follow_up_channel", "last_follow_up_channel VARCHAR(32)")
         add("last_follow_up_note", "last_follow_up_note VARCHAR(2000)")
+        add("follow_up_history", "follow_up_history VARCHAR(8000)")
 
         for stmt in alters:
             conn.execute(text(stmt))
@@ -155,6 +157,7 @@ class CompanyIn(BaseModel):
 
 class CompanyOut(CompanyIn):
     id: int
+    follow_up_history: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -199,8 +202,27 @@ def update_company(company_id: int, payload: CompanyIn, db: Session = Depends(ge
         if exists:
             raise HTTPException(status_code=409, detail="Company name already exists")
 
+    old_follow_up = (
+        row.last_follow_up_at,
+        row.last_follow_up_channel,
+        row.last_follow_up_note,
+    )
+
     for k, v in payload.model_dump().items():
         setattr(row, k, v)
+
+    new_follow_up = (
+        row.last_follow_up_at,
+        row.last_follow_up_channel,
+        row.last_follow_up_note,
+    )
+    if new_follow_up != old_follow_up and row.last_follow_up_at:
+        follow_time = row.last_follow_up_at.strftime("%Y-%m-%d %H:%M:%S")
+        follow_channel = row.last_follow_up_channel or "未填写渠道"
+        follow_note = row.last_follow_up_note or "（无备注）"
+        new_line = f"[{follow_time}] {follow_channel} | {follow_note}"
+        history = (row.follow_up_history or "").strip()
+        row.follow_up_history = f"{history}\n{new_line}" if history else new_line
     db.add(row)
     db.commit()
     db.refresh(row)
