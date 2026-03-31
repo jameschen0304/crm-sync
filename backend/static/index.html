@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM（公司）- 上班时间提醒</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260327l" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <div>
+          <h1>CRM 工作台</h1>
+          <p class="sub">客户分区 + 跟进排期 + 到期提醒</p>
+        </div>
+      </header>
+
+      <section class="app-shell">
+        <aside class="panel sidebar">
+          <h2>筛选与操作</h2>
+          <div class="sidebar-block">
+            <label>
+              地区
+              <select id="regionFilter" class="select">
+                <option value="">全部地区</option>
+                <option value="东南亚">东南亚</option>
+                <option value="南亚">南亚</option>
+                <option value="欧美澳">欧美澳</option>
+                <option value="中东">中东</option>
+                <option value="中亚">中亚</option>
+                <option value="非洲">非洲</option>
+                <option value="中南美">中南美</option>
+              </select>
+            </label>
+            <label>
+              跟进状态
+              <select id="followStatusFilter" class="select">
+                <option value="">全部</option>
+                <option value="overdue">逾期</option>
+                <option value="today">今日待跟进</option>
+                <option value="scheduled">已排期</option>
+                <option value="none">未设置</option>
+              </select>
+            </label>
+            <label>
+              搜索
+              <input id="search" class="input" placeholder="公司名 / 邮箱 / WhatsApp" />
+            </label>
+          </div>
+          <div class="sidebar-block">
+            <label>
+              负责人（人物）
+              <input id="ownerName" class="input" placeholder="例如：Alex" />
+            </label>
+            <label>
+              每日新增目标
+              <input id="dailyTarget" class="input" type="number" min="1" step="1" value="5" />
+            </label>
+            <button id="btnSaveDailySettings" class="btn btn-secondary">保存目标设置</button>
+          </div>
+          <div class="sidebar-block">
+            <div class="view-toggle">
+              <button id="btnViewDetailed" class="btn">详细视图</button>
+              <button id="btnViewCompact" class="btn btn-secondary">紧凑视图</button>
+            </div>
+            <button id="btnEnableNotif" class="btn">开启系统通知</button>
+            <button id="btnRefresh" class="btn btn-secondary">刷新</button>
+          </div>
+        </aside>
+
+        <div class="main-content">
+          <section class="panel">
+            <h2>今日概览</h2>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">客户总数</div>
+                <div id="statTotal" class="stat-value">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">逾期待跟进</div>
+                <div id="statOverdue" class="stat-value danger">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">今日待跟进</div>
+                <div id="statToday" class="stat-value warn">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">已排期</div>
+                <div id="statScheduled" class="stat-value">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">今日新增</div>
+                <div id="statTodayNew" class="stat-value">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">目标剩余</div>
+                <div id="statGoalLeft" class="stat-value">0</div>
+              </div>
+            </div>
+            <p id="dailyGoalHint" class="sub"></p>
+          </section>
+
+          <section class="panel">
+            <h2>客户列表</h2>
+            <div id="listDetailLayout" class="list-detail-layout">
+              <div id="list" class="list"></div>
+              <aside id="detailPanel" class="detail-side" style="display:none;">
+                <h2>客户详情</h2>
+                <div id="detailContent" class="detail-grid"></div>
+                <div class="form-actions" style="margin-top:10px;">
+                  <button id="btnDetailEdit" class="btn btn-secondary" type="button">编辑此客户</button>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section id="editPanel" class="panel">
+        <h2>新增 / 编辑客户</h2>
+        <form id="companyForm" class="form">
+          <input type="hidden" id="id" />
+
+          <label>
+            公司名字（唯一）
+            <input id="name" required maxlength="255" placeholder="例如：Acme Inc." />
+          </label>
+
+          <div class="grid2">
+            <label>
+              国家（可选）
+              <select id="country_code">
+                <option value="">— 请选择 —</option>
+              </select>
+            </label>
+            <label>
+              地区标签（自动，可手动改）
+              <select id="region" class="select">
+                <option value="">—</option>
+                <option value="东南亚">东南亚</option>
+                <option value="南亚">南亚</option>
+                <option value="欧美澳">欧美澳</option>
+                <option value="中东">中东</option>
+                <option value="中亚">中亚</option>
+                <option value="非洲">非洲</option>
+                <option value="中南美">中南美</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            时区（自动填，可手动改）
+            <input id="timezone" list="tzlist" required maxlength="64" placeholder="例如：America/New_York" />
+            <datalist id="tzlist"></datalist>
+          </label>
+
+          <details class="details">
+            <summary>跟进设置</summary>
+            <div class="details-body">
+              <div class="grid2">
+                <label>
+                  跟进阶段
+                  <select id="follow_up_stage" class="select">
+                    <option value="新线索">新线索（1天）</option>
+                    <option value="已联系">已联系（3天）</option>
+                    <option value="需求确认">需求确认（3天）</option>
+                    <option value="已报价">已报价（2天）</option>
+                    <option value="谈判中">谈判中（2天）</option>
+                    <option value="成交">成交（30天回访）</option>
+                    <option value="暂停">暂停（不提醒）</option>
+                  </select>
+                </label>
+                <label>
+                  下次跟进时间
+                  <input id="next_follow_up_at" type="datetime-local" />
+                </label>
+              </div>
+              <label>
+                最近跟进时间
+                <input id="last_follow_up_at" type="datetime-local" />
+              </label>
+              <div class="grid2">
+                <label>
+                  跟进渠道
+                  <select id="last_follow_up_channel" class="select">
+                    <option value="">— 请选择 —</option>
+                    <option value="领英私信">领英私信</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="邮件">邮件</option>
+                    <option value="电话">电话</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </label>
+                <label>
+                  跟进备注
+                  <textarea id="last_follow_up_note" rows="2" placeholder="记录本次跟进内容..."></textarea>
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <details class="details">
+            <summary>最近成交（可选，粘贴文本会自动整理）</summary>
+            <div class="details-body">
+              <label>
+                粘贴文本
+                <textarea id="last_won_raw" rows="3" placeholder="把成交信息整段复制粘贴到这里，例如：&#10;2026/03/20 HS: 390120 数量 500kg 单价 $1.2/kg 供应商：ABC"></textarea>
+              </label>
+
+              <div class="grid2">
+                <label>
+                  成交时间（解析结果）
+                  <input id="last_won_time" type="datetime-local" />
+                </label>
+                <label>
+                  供应商（解析结果）
+                  <input id="last_won_supplier" placeholder="例如：ABC" />
+                </label>
+              </div>
+
+              <div class="grid2">
+                <label>
+                  海关编码（HS，解析结果）
+                  <input id="last_won_product" placeholder="例如：390120" />
+                </label>
+                <label>
+                  数量（吨，解析结果）
+                  <input id="last_won_qty" placeholder="例如：0.5吨" />
+                </label>
+              </div>
+
+              <label>
+                单价（每吨，解析结果）
+                <input id="last_won_unit_price" placeholder="例如：1200 USD/吨" />
+              </label>
+            </div>
+          </details>
+
+          <details class="details">
+            <summary>更多联系方式（可选）</summary>
+            <div class="details-body">
+              <label>
+                领英链接（可选）
+                <input id="linkedin_url" maxlength="512" placeholder="https://www.linkedin.com/company/..." />
+              </label>
+
+              <label>
+                官网链接（可选）
+                <input id="website_url" maxlength="512" placeholder="https://example.com" />
+              </label>
+
+              <div class="grid2">
+                <label>
+                  邮箱（可选）
+                  <input id="email" maxlength="255" placeholder="name@example.com" />
+                </label>
+                <label>
+                  WhatsApp（可选）
+                  <input id="whatsapp" maxlength="64" placeholder="+14155552671" />
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <div class="form-actions">
+            <button class="btn" type="submit">保存</button>
+            <button class="btn btn-secondary" id="btnReset" type="button">清空</button>
+          </div>
+          <p id="formMsg" class="msg"></p>
+        </form>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/app.js?v=20260327m"></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+### Python / FastAPI
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+backend/crm.db
+**/*.db
+
+### Environment / secrets
+.env
+*.env
+**/.env.*
+
+### Logs
+**/*.log
+
+### OS / editors
+**/.DS_Store
+.vscode/
+.idea/
+
+### Frontend (if any)
+frontend/node_modules/
+**/node_modules/
