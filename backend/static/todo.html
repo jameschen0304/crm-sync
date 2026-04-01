@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
     <title>每日 To-Do</title>
-    <link rel="stylesheet" href="./styles.css?v=20260331c" />
+    <link rel="stylesheet" href="./styles.css?v=20260401c" />
   </head>
   <body>
     <main class="wrap">
@@ -13,7 +14,7 @@
           <h1>每日 To-Do</h1>
           <p class="sub">单独任务模块：记录、跟踪、重复执行</p>
         </div>
-        <a class="btn btn-secondary" href="./index.html">返回 CRM</a>
+        <a class="btn btn-secondary" href="./index.html?v=20260401c">返回 CRM</a>
       </header>
 
       <section class="panel">
@@ -32,7 +33,10 @@
             <option value="medium" selected>中优先级</option>
             <option value="low">低优先级</option>
           </select>
-          <button id="btnTodoAdd" class="btn" type="submit">添加任务</button>
+          <div class="todo-form-actions">
+            <button id="btnTodoAdd" class="btn" type="submit">添加任务</button>
+            <button id="btnTodoCancelEdit" class="btn btn-secondary" type="button" hidden>取消编辑</button>
+          </div>
         </form>
 
         <div class="todo-toolbar">
@@ -51,6 +55,6 @@
       </section>
     </main>
 
-    <script src="./todo.js?v=20260331c"></script>
+    <script src="./todo.js?v=20260401c"></script>
   </body>
  </html>

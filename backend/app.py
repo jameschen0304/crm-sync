@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import DateTime, Integer, String, create_engine, select, text
@@ -99,6 +99,68 @@ def _is_business_day(dt: datetime) -> bool:
     return mmdd not in HOLIDAYS_MMDD
 
 
+# 与 static/app.js 中 FOLLOW_UP_STAGE_DAYS 保持一致
+FOLLOW_UP_STAGE_DAYS = {
+    "新线索": 1,
+    "已联系": 3,
+    "需求确认": 3,
+    "已报价": 2,
+    "谈判中": 2,
+    "成交": 30,
+    "暂停": None,
+}
+
+
+def compute_next_follow_up_at(stage: str, from_dt: datetime) -> Optional[datetime]:
+    """与前端 computeNextFollowUpISO 同一规则：按工作日跳过周末与节假日。"""
+    if stage == "暂停":
+        return None
+    days = FOLLOW_UP_STAGE_DAYS.get(stage)
+    if days is None:
+        return None
+    d = from_dt
+    left = days
+    while left > 0:
+        d = d + timedelta(days=1)
+        if _is_business_day(d):
+            left -= 1
+    while not _is_business_day(d):
+        d = d + timedelta(days=1)
+    return d
+
+
+def migrate_follow_up_defaults() -> None:
+    """历史客户：补全跟进阶段与下次跟进时间（与当前前端逻辑一致）。"""
+    valid_stages = set(FOLLOW_UP_STAGE_DAYS.keys())
+    now = datetime.utcnow()
+    with Session(engine) as db:
+        rows = db.scalars(select(Company)).all()
+        changed = False
+        for row in rows:
+            stage = (row.follow_up_stage or "").strip() or None
+            if not stage or stage not in valid_stages:
+                row.follow_up_stage = "新线索"
+                stage = "新线索"
+                changed = True
+            if stage == "暂停":
+                if row.next_follow_up_at is not None:
+                    row.next_follow_up_at = None
+                    row.updated_at = datetime.utcnow()
+                    changed = True
+                continue
+            if row.next_follow_up_at is None:
+                nxt = compute_next_follow_up_at(stage, now)
+                if nxt:
+                    row.next_follow_up_at = nxt
+                    row.updated_at = datetime.utcnow()
+                    changed = True
+        if changed:
+            db.commit()
+
+
+migrate_follow_up_defaults()
+
+
 def normalize_existing_followup_dates():
     # 对历史数据做一次“工作日规范化”
     with Session(engine) as db:
@@ -168,9 +230,21 @@ static_dir = Path(__file__).with_name("static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+@app.middleware("http")
+async def no_cache_html_middleware(request: Request, call_next):
+    """避免浏览器/CDN 长期缓存 HTML，导致前端改版后用户仍看到旧页面。"""
+    response = await call_next(request)
+    path = request.url.path
+    if path.endswith(".html") or path == "/":
+        response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.get("/")
 def index():
-    return FileResponse(static_dir / "index.html")
+    # 必须用 /static/index.html 打开页面，这样 ./styles.css、./app.js 才会解析到 /static/ 下
+    return RedirectResponse(url="/static/index.html", status_code=302)
 
 
 @app.get("/api/companies", dependencies=[Depends(require_api_key)])

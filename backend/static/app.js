@@ -13,6 +13,17 @@ const FOLLOW_UP_STAGE_DAYS = {
   "成交": 30,
   "暂停": null,
 };
+/** 列表「跟进」按钮：每记一次自动推进到下一阶段（暂停不推进，成交保持） */
+const FOLLOW_UP_STAGE_ORDER = ["新线索", "已联系", "需求确认", "已报价", "谈判中", "成交"];
+
+function stageAfterFollowUpRecord(currentStage) {
+  const cur = currentStage || "新线索";
+  if (cur === "暂停") return "暂停";
+  const idx = FOLLOW_UP_STAGE_ORDER.indexOf(cur);
+  if (idx === -1) return cur;
+  if (idx >= FOLLOW_UP_STAGE_ORDER.length - 1) return "成交";
+  return FOLLOW_UP_STAGE_ORDER[idx + 1];
+}
 // 节假日（MM-DD）: 自动排期时会避开这些日期。
 // 可按你的实际节假日维护这份列表。
 const HOLIDAYS_MMDD = new Set([
@@ -521,6 +532,42 @@ function isBusinessDay(d) {
   return !HOLIDAYS_MMDD.has(`${mm}-${dd}`);
 }
 
+/** 离线模式：历史客户补全跟进阶段与下次跟进时间（与后端启动迁移一致） */
+function migrateLocalFollowUpDefaults() {
+  const rows = localLoadCompanies();
+  const validStages = new Set(Object.keys(FOLLOW_UP_STAGE_DAYS));
+  const now = new Date();
+  let changed = false;
+  const out = rows.map((r) => {
+    let stage = r.follow_up_stage;
+    if (!stage || !String(stage).trim() || !validStages.has(stage)) {
+      stage = "新线索";
+    }
+    let next = r.next_follow_up_at;
+    if (stage === "暂停") {
+      if (next != null && next !== "") {
+        next = null;
+      }
+    } else if (!next) {
+      next = computeNextFollowUpISO(stage, now);
+    }
+    const nextWas = r.next_follow_up_at;
+    const same = stage === r.follow_up_stage && (next || null) === (nextWas || null);
+    if (same) return r;
+    changed = true;
+    return {
+      ...r,
+      follow_up_stage: stage,
+      next_follow_up_at: next,
+      updated_at: new Date().toISOString(),
+    };
+  });
+  if (changed) {
+    localSaveCompanies(out);
+  }
+  return changed;
+}
+
 function askFollowUpChannel(defaultChannel = "") {
   const hint = `输入渠道编号：
 1 领英私信
@@ -949,22 +996,23 @@ function renderList() {
       const id = Number(btn.getAttribute("data-follow"));
       const c = companies.find((x) => x.id === id);
       if (!c) return;
-      const stage = c.follow_up_stage || "新线索";
+      const nextStage = stageAfterFollowUpRecord(c.follow_up_stage);
       const channel = askFollowUpChannel(c.last_follow_up_channel || "");
       if (channel === null) return;
       const note = prompt("请输入本次跟进备注（可空）：", c.last_follow_up_note || "");
       if (note === null) return;
       const nowIso = new Date().toISOString();
-      const nextIso = computeNextFollowUpISO(stage, new Date());
+      const nextIso = computeNextFollowUpISO(nextStage, new Date());
       try {
         await apiPut(`/api/companies/${id}`, {
           ...c,
+          follow_up_stage: nextStage,
           last_follow_up_at: nowIso,
           last_follow_up_channel: channel,
           last_follow_up_note: String(note || "").trim() || null,
           next_follow_up_at: nextIso,
         });
-        setMsg(`已记录跟进：${c.name}，并自动排期下一次。`, "ok");
+        setMsg(`已记录跟进：${c.name}，阶段已设为「${nextStage}」，并自动排期下一次。`, "ok");
         await refresh();
       } catch (e) {
         setMsg(`记录跟进失败：${String(e?.message || e)}`, "error");
@@ -1219,6 +1267,7 @@ async function importLocalDataFromFile(file) {
   const normalized = normalizeImportedRows(rows);
   if (!normalized.length) throw new Error("文件中没有可导入的数据");
   localSaveCompanies(normalized);
+  migrateLocalFollowUpDefaults();
   companies = localListCompanies();
   renderList();
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
@@ -1235,6 +1284,7 @@ async function refresh() {
     // 无法连接后端时，自动切换离线 HTML 模式，方便在其他电脑直接使用
     USE_LOCAL_MODE = true;
     const seeded = await tryAutoSeedFromHostedJSON();
+    migrateLocalFollowUpDefaults();
     companies = localListCompanies();
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
     else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");

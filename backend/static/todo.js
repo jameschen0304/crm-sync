@@ -1,5 +1,6 @@
 const TODO_DATA_KEY = "crm_todo_items_v1";
 let todoItems = [];
+let editingTodoId = null;
 
 function q(id) {
   return document.getElementById(id);
@@ -22,6 +23,35 @@ function loadTodoItems() {
 
 function saveTodoItems() {
   localStorage.setItem(TODO_DATA_KEY, JSON.stringify(todoItems));
+}
+
+function resetTodoForm() {
+  q("todoForm").reset();
+  q("todoRepeat").value = "none";
+  q("todoPriority").value = "medium";
+  editingTodoId = null;
+  q("btnTodoAdd").textContent = "添加任务";
+  const cancel = q("btnTodoCancelEdit");
+  if (cancel) cancel.hidden = true;
+  q("todoForm").classList.remove("is-editing");
+}
+
+function beginEditTodo(id) {
+  const row = todoItems.find((x) => Number(x.id) === Number(id));
+  if (!row) return;
+  editingTodoId = Number(id);
+  q("todoText").value = row.text || "";
+  q("todoDueDate").value = row.due_date || "";
+  const r = row.repeat || "none";
+  q("todoRepeat").value = ["none", "daily", "workday", "weekly", "monthly"].includes(r) ? r : "none";
+  const p = row.priority || "medium";
+  q("todoPriority").value = ["high", "medium", "low"].includes(p) ? p : "medium";
+  q("btnTodoAdd").textContent = "保存修改";
+  const cancel = q("btnTodoCancelEdit");
+  if (cancel) cancel.hidden = false;
+  q("todoForm").classList.add("is-editing");
+  q("todoText").focus();
+  renderTodoList();
 }
 
 function getTodayDateStr() {
@@ -100,8 +130,10 @@ function renderTodoList() {
     const dueText = item.due_date ? `截止：${escapeHtml(item.due_date)}` : "截止：未设置";
     const statusText = s === "overdue" ? "逾期" : s === "today" ? "今天到期" : item.done ? "已完成" : "待办";
     const repeatText = `重复：${todoRepeatLabel(item.repeat || "none")}`;
+    const editingCls =
+      editingTodoId != null && Number(item.id) === editingTodoId ? " editing" : "";
     return `
-      <div class="todo-item ${item.done ? "done" : ""}">
+      <div class="todo-item ${item.done ? "done" : ""}${editingCls}">
         <input class="todo-check" type="checkbox" data-todo-toggle="${item.id}" ${item.done ? "checked" : ""} />
         <div class="todo-main">
           <div class="todo-text">${escapeHtml(item.text || "")}</div>
@@ -109,6 +141,7 @@ function renderTodoList() {
         </div>
         <div class="todo-actions">
           <span class="todo-priority ${item.priority || "medium"}">${todoPriorityLabel(item.priority)}</span>
+          <button class="btn btn-secondary" type="button" data-todo-edit="${item.id}">编辑</button>
           <button class="btn btn-secondary" type="button" data-todo-del="${item.id}">删除</button>
         </div>
       </div>
@@ -143,9 +176,19 @@ function renderTodoList() {
     });
   });
 
+  listEl.querySelectorAll("[data-todo-edit]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = Number(el.getAttribute("data-todo-edit"));
+      beginEditTodo(id);
+    });
+  });
+
   listEl.querySelectorAll("[data-todo-del]").forEach((el) => {
     el.addEventListener("click", () => {
       const id = Number(el.getAttribute("data-todo-del"));
+      if (editingTodoId === id) {
+        resetTodoForm();
+      }
       todoItems = todoItems.filter((x) => Number(x.id) !== id);
       saveTodoItems();
       renderTodoList();
@@ -161,22 +204,43 @@ q("todoForm").addEventListener("submit", (ev) => {
   const repeat = (q("todoRepeat").value || "none").trim();
   const priority = (q("todoPriority").value || "medium").trim();
   const normalizedDue = repeat !== "none" ? (dueDate || getTodayDateStr()) : dueDate;
-  const nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
+  const normRepeat = ["none", "daily", "workday", "weekly", "monthly"].includes(repeat) ? repeat : "none";
+  const normPriority = ["high", "medium", "low"].includes(priority) ? priority : "medium";
   const now = new Date().toISOString();
+
+  if (editingTodoId != null) {
+    const row = todoItems.find((x) => Number(x.id) === editingTodoId);
+    if (row) {
+      row.text = text;
+      row.due_date = normalizedDue;
+      row.repeat = normRepeat;
+      row.priority = normPriority;
+      row.updated_at = now;
+    }
+    saveTodoItems();
+    resetTodoForm();
+    renderTodoList();
+    return;
+  }
+
+  const nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
   todoItems.unshift({
     id: nextId,
     text,
     due_date: normalizedDue,
-    repeat: ["none", "daily", "workday", "weekly", "monthly"].includes(repeat) ? repeat : "none",
-    priority: ["high", "medium", "low"].includes(priority) ? priority : "medium",
+    repeat: normRepeat,
+    priority: normPriority,
     done: false,
     created_at: now,
     updated_at: now,
   });
   saveTodoItems();
-  q("todoForm").reset();
-  q("todoRepeat").value = "none";
-  q("todoPriority").value = "medium";
+  resetTodoForm();
+  renderTodoList();
+});
+
+q("btnTodoCancelEdit").addEventListener("click", () => {
+  resetTodoForm();
   renderTodoList();
 });
 
