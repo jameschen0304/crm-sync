@@ -146,6 +146,20 @@ def compute_next_monday_at(from_dt: datetime) -> datetime:
     return from_dt + timedelta(days=delta)
 
 
+def _normalize_monday_routine_fields(data: dict) -> dict:
+    """周一例行仅对有 WhatsApp 的客户生效。"""
+    whatsapp = (data.get("whatsapp") or "").strip()
+    enabled = data.get("monday_routine_enabled") == "1"
+    if enabled and whatsapp:
+        data["monday_routine_enabled"] = "1"
+        if data.get("monday_next_follow_up_at") is None:
+            data["monday_next_follow_up_at"] = compute_next_monday_at(datetime.utcnow())
+    else:
+        data["monday_routine_enabled"] = None
+        data["monday_next_follow_up_at"] = None
+    return data
+
+
 def migrate_follow_up_defaults() -> None:
     """历史客户：补全跟进阶段与下次跟进时间（与当前前端逻辑一致）。"""
     valid_stages = set(FOLLOW_UP_STAGE_DAYS.keys())
@@ -174,6 +188,14 @@ def migrate_follow_up_defaults() -> None:
             if row.monday_routine_enabled != "1" and row.monday_next_follow_up_at is not None:
                 row.monday_next_follow_up_at = None
                 changed = True
+            # 无 WhatsApp 的客户不允许周一例行
+            if not (row.whatsapp or "").strip():
+                if row.monday_routine_enabled is not None:
+                    row.monday_routine_enabled = None
+                    changed = True
+                if row.monday_next_follow_up_at is not None:
+                    row.monday_next_follow_up_at = None
+                    changed = True
             if stage == "暂停":
                 if row.next_follow_up_at is not None:
                     row.next_follow_up_at = None
@@ -294,7 +316,8 @@ def create_company(payload: CompanyIn, db: Session = Depends(get_db)) -> Company
     exists = db.scalar(select(Company).where(Company.name == payload.name))
     if exists:
         raise HTTPException(status_code=409, detail="Company name already exists")
-    row = Company(**payload.model_dump())
+    data = _normalize_monday_routine_fields(payload.model_dump())
+    row = Company(**data)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -318,7 +341,8 @@ def update_company(company_id: int, payload: CompanyIn, db: Session = Depends(ge
         row.last_follow_up_note,
     )
 
-    for k, v in payload.model_dump().items():
+    data = _normalize_monday_routine_fields(payload.model_dump())
+    for k, v in data.items():
         setattr(row, k, v)
 
     new_follow_up = (
