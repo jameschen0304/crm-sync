@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM（公司）- 上班时间提醒</title>
-    <link rel="stylesheet" href="./styles.css?v=20260401c" />
+    <link rel="stylesheet" href="./styles.css?v=20260401e" />
   </head>
   <body>
     <main class="wrap">
@@ -59,12 +59,13 @@
             <button id="btnSaveDailySettings" class="btn btn-secondary">保存目标设置</button>
           </div>
           <div class="sidebar-block">
-            <a class="btn btn-secondary" href="./todo.html?v=20260401c">打开每日 To-Do 模块</a>
+            <a class="btn btn-secondary" href="./todo.html?v=20260401d">打开每日 To-Do 模块</a>
             <div class="view-toggle">
               <button id="btnViewDetailed" class="btn">详细视图</button>
               <button id="btnViewCompact" class="btn btn-secondary">紧凑视图</button>
             </div>
             <button id="btnEnableNotif" class="btn">开启系统通知</button>
+            <button id="btnBatchEnableMonday" class="btn btn-secondary">按当前筛选批量开启周一例行</button>
             <button id="btnRefresh" class="btn btn-secondary">刷新</button>
             <button id="btnExportData" class="btn btn-secondary">导出数据(JSON)</button>
             <button id="btnImportData" class="btn btn-secondary">导入数据(JSON)</button>
@@ -198,6 +199,27 @@
                   <textarea id="last_follow_up_note" rows="2" placeholder="记录本次跟进内容..."></textarea>
                 </label>
               </div>
+              <div class="grid2">
+                <label>
+                  周一例行
+                  <select id="monday_routine_enabled" class="select">
+                    <option value="">关闭</option>
+                    <option value="1">开启（每周一）</option>
+                  </select>
+                </label>
+                <label>
+                  下次周一例行时间
+                  <input id="monday_next_follow_up_at" type="datetime-local" />
+                </label>
+              </div>
+              <label>
+                周一例行最近时间
+                <input id="monday_last_follow_up_at" type="datetime-local" />
+              </label>
+              <label>
+                周一例行最近备注
+                <textarea id="monday_last_follow_up_note" rows="2" placeholder="例如：发行业研视频"></textarea>
+              </label>
             </div>
           </details>
 
@@ -275,6 +297,6 @@
       </section>
     </main>
 
-    <script src="./app.js?v=20260401c"></script>
+    <script src="./app.js?v=20260401g"></script>
   </body>
 </html>

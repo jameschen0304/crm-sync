@@ -395,6 +395,16 @@ function notifyFollowUp(company, dueAt) {
   }
 }
 
+function notifyMondayRoutine(company, dueAt) {
+  const dueText = dueAt ? new Date(dueAt).toLocaleString() : "现在";
+  const body = `${company.name} 周一例行待跟进（到期：${dueText}，建议：发行业研视频）`;
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("周一例行提醒", { body });
+  } else {
+    alert(body);
+  }
+}
+
 let companies = [];
 let reminderTimer = null;
 const prevWorking = new Map();
@@ -477,6 +487,16 @@ function startReminderLoop(intervalMs = 60000) {
           }
         }
       }
+      if (c.monday_routine_enabled === "1" && c.monday_next_follow_up_at) {
+        const dueMs = new Date(c.monday_next_follow_up_at).getTime();
+        if (!Number.isNaN(dueMs) && dueMs <= now.getTime()) {
+          const mondayKey = `monday-reminded:${c.id}:${new Date(c.monday_next_follow_up_at).toISOString()}`;
+          if (!localStorage.getItem(mondayKey)) {
+            localStorage.setItem(mondayKey, "1");
+            notifyMondayRoutine(c, c.monday_next_follow_up_at);
+          }
+        }
+      }
       prevWorking.set(c.id, working);
     }
     renderList();
@@ -524,6 +544,44 @@ function computeNextFollowUpISO(stage, fromDate = new Date()) {
   return d.toISOString();
 }
 
+function computeNextMondayISO(fromDate = new Date()) {
+  const d = new Date(fromDate);
+  const weekday = d.getDay(); // 0 Sun ... 6 Sat
+  let delta = (8 - weekday) % 7;
+  if (delta === 0) delta = 7;
+  d.setDate(d.getDate() + delta);
+  return d.toISOString();
+}
+
+function getFilteredCompaniesNow() {
+  const regionFilter = (q("regionFilter")?.value || "").trim();
+  const followStatusFilter = (q("followStatusFilter")?.value || "").trim();
+  const keyword = (q("search")?.value || "").trim().toLowerCase();
+  const now = new Date();
+  const followStatusOf = (c) => {
+    if (!c.next_follow_up_at) return "none";
+    const dueMs = new Date(c.next_follow_up_at).getTime();
+    if (Number.isNaN(dueMs)) return "none";
+    const nowMs = now.getTime();
+    if (dueMs <= nowMs) return "overdue";
+    const due = new Date(c.next_follow_up_at);
+    const sameDay =
+      due.getFullYear() === now.getFullYear() &&
+      due.getMonth() === now.getMonth() &&
+      due.getDate() === now.getDate();
+    if (sameDay) return "today";
+    return "scheduled";
+  };
+  return companies.filter((c) => {
+    const effectiveRegion = (c.region || countryToRegion(c.country_code || "") || "").trim();
+    if (regionFilter && effectiveRegion !== regionFilter) return false;
+    if (followStatusFilter && followStatusOf(c) !== followStatusFilter) return false;
+    if (!keyword) return true;
+    const hay = `${c.name || ""} ${c.email || ""} ${c.whatsapp || ""}`.toLowerCase();
+    return hay.includes(keyword);
+  });
+}
+
 function isBusinessDay(d) {
   const day = d.getDay(); // 0 Sun, 6 Sat
   if (day === 0 || day === 6) return false;
@@ -540,6 +598,14 @@ function migrateLocalFollowUpDefaults() {
   let changed = false;
   const out = rows.map((r) => {
     let stage = r.follow_up_stage;
+    let mondayEnabled = r.monday_routine_enabled || null;
+    let mondayNext = r.monday_next_follow_up_at || null;
+    // 兼容旧版本把“周一例行”塞在主阶段里的数据
+    if (stage === "周一例行") {
+      mondayEnabled = "1";
+      mondayNext = mondayNext || computeNextMondayISO(now);
+      stage = null;
+    }
     if (!stage || !String(stage).trim() || !validStages.has(stage)) {
       stage = "新线索";
     }
@@ -552,13 +618,21 @@ function migrateLocalFollowUpDefaults() {
       next = computeNextFollowUpISO(stage, now);
     }
     const nextWas = r.next_follow_up_at;
-    const same = stage === r.follow_up_stage && (next || null) === (nextWas || null);
+    if (mondayEnabled === "1" && !mondayNext) mondayNext = computeNextMondayISO(now);
+    if (mondayEnabled !== "1") mondayNext = null;
+    const same =
+      stage === r.follow_up_stage &&
+      (next || null) === (nextWas || null) &&
+      (mondayEnabled || null) === (r.monday_routine_enabled || null) &&
+      (mondayNext || null) === (r.monday_next_follow_up_at || null);
     if (same) return r;
     changed = true;
     return {
       ...r,
       follow_up_stage: stage,
       next_follow_up_at: next,
+      monday_routine_enabled: mondayEnabled,
+      monday_next_follow_up_at: mondayNext,
       updated_at: new Date().toISOString(),
     };
   });
@@ -836,6 +910,7 @@ function renderList() {
       const effectiveRegion = c.region || countryToRegion(c.country_code || "") || "";
       const regionChip = effectiveRegion ? `<span class="chip">${escapeHtml(effectiveRegion)}</span>` : "";
       const stageChip = c.follow_up_stage ? `<span class="chip">${escapeHtml(c.follow_up_stage)}</span>` : `<span class="chip">未设跟进</span>`;
+      const mondayChip = c.monday_routine_enabled === "1" ? `<span class="chip chip-warn">周一例行</span>` : "";
       let followStatus = "未设置";
       let followStatusClass = "chip";
       if (c.next_follow_up_at) {
@@ -865,11 +940,12 @@ function renderList() {
         <div class="row">
           <div class="${dotClass}" title="${working ? "上班中" : "非上班时间"}"></div>
           <div>
-            <div class="name"><button class="name-btn" data-open-detail="${c.id}">${escapeHtml(c.name)}</button> ${regionChip} ${stageChip}</div>
+            <div class="name"><button class="name-btn" data-open-detail="${c.id}">${escapeHtml(c.name)}</button> ${regionChip} ${stageChip} ${mondayChip}</div>
             <div class="meta">领英：${linkedinTop}</div>
             <div class="meta">${escapeHtml(c.timezone)} · ${escapeHtml(c.country_code || "—")} · 本地时间 ${escapeHtml(timeStr || "—")}（${escapeHtml(dateStr || "—")}）</div>
             <div class="meta">其他链接：${links || "—"}</div>
             <div class="meta">下次跟进：${c.next_follow_up_at ? escapeHtml(new Date(c.next_follow_up_at).toLocaleString()) : "—"} · 最近跟进：${c.last_follow_up_at ? escapeHtml(new Date(c.last_follow_up_at).toLocaleString()) : "—"} · <span class="${followStatusClass}">${followStatus}</span></div>
+            <div class="meta">周一例行：${c.monday_routine_enabled === "1" ? "开启" : "关闭"} · 下次：${c.monday_next_follow_up_at ? escapeHtml(new Date(c.monday_next_follow_up_at).toLocaleString()) : "—"} · 最近备注：${escapeHtml(c.monday_last_follow_up_note || "—")}</div>
             <details class="mini-details">
               <summary>跟进记录（${escapeHtml(c.last_follow_up_channel || "—")}）</summary>
               <div class="mini-details-body">
@@ -888,6 +964,7 @@ function renderList() {
           </div>
           <div class="actions">
             <button class="btn" data-follow="${c.id}">已跟进</button>
+            ${c.monday_routine_enabled === "1" ? `<button class="btn btn-secondary" data-monday-follow="${c.id}">周一例行已发</button>` : ""}
             <button class="btn btn-secondary" data-edit="${c.id}">编辑</button>
             <button class="btn btn-secondary" data-del="${c.id}">删除</button>
           </div>
@@ -952,6 +1029,10 @@ function renderList() {
       q("follow_up_stage").value = c.follow_up_stage || "新线索";
       q("next_follow_up_at").value = toDatetimeLocalValue(c.next_follow_up_at);
       q("last_follow_up_at").value = toDatetimeLocalValue(c.last_follow_up_at);
+      q("monday_routine_enabled").value = c.monday_routine_enabled || "";
+      q("monday_next_follow_up_at").value = toDatetimeLocalValue(c.monday_next_follow_up_at);
+      q("monday_last_follow_up_at").value = toDatetimeLocalValue(c.monday_last_follow_up_at);
+      q("monday_last_follow_up_note").value = c.monday_last_follow_up_note || "";
       q("last_follow_up_channel").value = c.last_follow_up_channel || "";
       q("last_follow_up_note").value = c.last_follow_up_note || "";
       q("last_won_raw").value = c.last_won_raw || "";
@@ -999,7 +1080,8 @@ function renderList() {
       const nextStage = stageAfterFollowUpRecord(c.follow_up_stage);
       const channel = askFollowUpChannel(c.last_follow_up_channel || "");
       if (channel === null) return;
-      const note = prompt("请输入本次跟进备注（可空）：", c.last_follow_up_note || "");
+      const defaultNote = c.last_follow_up_note || "";
+      const note = prompt("请输入本次跟进备注（可空）：", defaultNote);
       if (note === null) return;
       const nowIso = new Date().toISOString();
       const nextIso = computeNextFollowUpISO(nextStage, new Date());
@@ -1016,6 +1098,31 @@ function renderList() {
         await refresh();
       } catch (e) {
         setMsg(`记录跟进失败：${String(e?.message || e)}`, "error");
+      }
+    });
+  });
+
+  el.querySelectorAll("[data-monday-follow]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.getAttribute("data-monday-follow"));
+      const c = companies.find((x) => x.id === id);
+      if (!c) return;
+      const note = prompt("周一例行备注：", c.monday_last_follow_up_note || "发行业研视频");
+      if (note === null) return;
+      const nowIso = new Date().toISOString();
+      const nextIso = computeNextMondayISO(new Date());
+      try {
+        await apiPut(`/api/companies/${id}`, {
+          ...c,
+          monday_routine_enabled: "1",
+          monday_last_follow_up_at: nowIso,
+          monday_last_follow_up_note: String(note || "").trim() || null,
+          monday_next_follow_up_at: nextIso,
+        });
+        setMsg(`已记录周一例行：${c.name}，下次已排到下周一。`, "ok");
+        await refresh();
+      } catch (e) {
+        setMsg(`记录周一例行失败：${String(e?.message || e)}`, "error");
       }
     });
   });
@@ -1061,6 +1168,10 @@ function renderDetail(c) {
     <div class="detail-item"><div class="detail-label">链接</div><div class="detail-value">${linkList || "—"}</div></div>
     <div class="detail-item"><div class="detail-label">跟进阶段</div><div class="detail-value">${escapeHtml(c.follow_up_stage || "—")}</div></div>
     <div class="detail-item"><div class="detail-label">下次跟进</div><div class="detail-value">${c.next_follow_up_at ? escapeHtml(new Date(c.next_follow_up_at).toLocaleString()) : "—"}</div></div>
+    <div class="detail-item"><div class="detail-label">周一例行</div><div class="detail-value">${c.monday_routine_enabled === "1" ? "开启" : "关闭"}</div></div>
+    <div class="detail-item"><div class="detail-label">下次周一例行</div><div class="detail-value">${c.monday_next_follow_up_at ? escapeHtml(new Date(c.monday_next_follow_up_at).toLocaleString()) : "—"}</div></div>
+    <div class="detail-item"><div class="detail-label">最近周一例行</div><div class="detail-value">${c.monday_last_follow_up_at ? escapeHtml(new Date(c.monday_last_follow_up_at).toLocaleString()) : "—"}</div></div>
+    <div class="detail-item"><div class="detail-label">周一例行最近备注</div><div class="detail-value">${escapeHtml(c.monday_last_follow_up_note || "—")}</div></div>
     <div class="detail-item"><div class="detail-label">最近跟进渠道</div><div class="detail-value">${escapeHtml(c.last_follow_up_channel || "—")}</div></div>
     <div class="detail-item"><div class="detail-label">最近跟进备注</div><div class="detail-value">${escapeHtml(c.last_follow_up_note || "—")}</div></div>
     <div class="detail-item"><div class="detail-label">跟进历史</div><div class="detail-value">${escapeHtml((c.follow_up_history || "").trim() || "—").replace(/\n/g, "<br>")}</div></div>
@@ -1315,6 +1426,10 @@ q("btnReset").addEventListener("click", () => {
   q("companyForm").reset();
   q("id").value = "";
   q("follow_up_stage").value = "新线索";
+  q("monday_routine_enabled").value = "";
+  q("monday_next_follow_up_at").value = "";
+  q("monday_last_follow_up_at").value = "";
+  q("monday_last_follow_up_note").value = "";
   q("last_follow_up_channel").value = "";
   q("last_follow_up_note").value = "";
   setMsg("");
@@ -1341,6 +1456,10 @@ q("companyForm").addEventListener("submit", async (ev) => {
     follow_up_stage: (q("follow_up_stage").value || "").trim() || null,
     next_follow_up_at: fromDatetimeLocalValue(q("next_follow_up_at").value),
     last_follow_up_at: fromDatetimeLocalValue(q("last_follow_up_at").value),
+    monday_routine_enabled: (q("monday_routine_enabled").value || "").trim() || null,
+    monday_next_follow_up_at: fromDatetimeLocalValue(q("monday_next_follow_up_at").value),
+    monday_last_follow_up_at: fromDatetimeLocalValue(q("monday_last_follow_up_at").value),
+    monday_last_follow_up_note: q("monday_last_follow_up_note").value.trim() || null,
     last_follow_up_channel: (q("last_follow_up_channel").value || "").trim() || null,
     last_follow_up_note: q("last_follow_up_note").value.trim() || null,
     last_won_raw: q("last_won_raw").value.trim() || null,
@@ -1358,6 +1477,12 @@ q("companyForm").addEventListener("submit", async (ev) => {
 
   if (!payload.next_follow_up_at && payload.follow_up_stage && payload.follow_up_stage !== "暂停") {
     payload.next_follow_up_at = computeNextFollowUpISO(payload.follow_up_stage, new Date());
+  }
+  if (payload.monday_routine_enabled === "1" && !payload.monday_next_follow_up_at) {
+    payload.monday_next_follow_up_at = computeNextMondayISO(new Date());
+  }
+  if (payload.monday_routine_enabled !== "1") {
+    payload.monday_next_follow_up_at = null;
   }
 
   try {
@@ -1388,6 +1513,15 @@ q("follow_up_stage").addEventListener("change", () => {
     q("next_follow_up_at").value = toDatetimeLocalValue(nextIso);
   }
 });
+q("monday_routine_enabled").addEventListener("change", () => {
+  const enabled = q("monday_routine_enabled").value === "1";
+  if (enabled && !q("monday_next_follow_up_at").value) {
+    q("monday_next_follow_up_at").value = toDatetimeLocalValue(computeNextMondayISO(new Date()));
+  }
+  if (!enabled) {
+    q("monday_next_follow_up_at").value = "";
+  }
+});
 q("regionFilter").addEventListener("change", renderList);
 q("followStatusFilter").addEventListener("change", renderList);
 q("search").addEventListener("input", renderList);
@@ -1404,6 +1538,30 @@ q("btnViewCompact").addEventListener("click", () => {
   renderList();
 });
 q("btnSaveDailySettings").addEventListener("click", saveDailySettings);
+q("btnBatchEnableMonday").addEventListener("click", async () => {
+  const targets = getFilteredCompaniesNow().filter((c) => c.monday_routine_enabled !== "1");
+  if (!targets.length) {
+    setMsg("当前筛选结果中没有需要开启周一例行的客户。", "ok");
+    return;
+  }
+  if (!confirm(`确认批量开启周一例行？将影响 ${targets.length} 个客户。`)) return;
+  let ok = 0;
+  let fail = 0;
+  for (const c of targets) {
+    try {
+      await apiPut(`/api/companies/${c.id}`, {
+        ...c,
+        monday_routine_enabled: "1",
+        monday_next_follow_up_at: c.monday_next_follow_up_at || computeNextMondayISO(new Date()),
+      });
+      ok += 1;
+    } catch {
+      fail += 1;
+    }
+  }
+  await refresh();
+  setMsg(`批量开启完成：成功 ${ok}，失败 ${fail}。`, fail ? "error" : "ok");
+});
 const dsInit = loadDailySettings();
 q("ownerName").value = dsInit.ownerName;
 q("dailyTarget").value = String(dsInit.dailyTarget);

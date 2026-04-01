@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
     <title>每日 To-Do</title>
-    <link rel="stylesheet" href="./styles.css?v=20260401c" />
+    <link rel="stylesheet" href="./styles.css?v=20260401d" />
   </head>
   <body>
     <main class="wrap">
@@ -17,7 +17,11 @@
         <a class="btn btn-secondary" href="./index.html?v=20260401c">返回 CRM</a>
       </header>
 
-      <section class="panel">
+      <section class="panel todo-panel">
+        <div class="todo-headline">
+          <h2>今日任务清单</h2>
+          <p class="sub">支持不重复/重复任务，勾选完成后自动生成下一条（按你的重复规则）。</p>
+        </div>
         <form id="todoForm" class="todo-form">
           <input id="todoText" class="input" maxlength="160" placeholder="输入今天要完成的任务..." required />
           <input id="todoDueDate" class="input" type="date" />
@@ -50,11 +54,18 @@
           <button id="btnTodoClearDone" class="btn btn-secondary" type="button">清除已完成</button>
         </div>
 
-        <div id="todoStats" class="sub"></div>
+        <div class="todo-stats-cards">
+          <div class="todo-stat-card"><span>总计</span><strong id="todoStatTotal">0</strong></div>
+          <div class="todo-stat-card"><span>待办</span><strong id="todoStatPending">0</strong></div>
+          <div class="todo-stat-card"><span>今天到期</span><strong id="todoStatToday">0</strong></div>
+          <div class="todo-stat-card"><span>逾期</span><strong id="todoStatOverdue">0</strong></div>
+          <div class="todo-stat-card"><span>完成</span><strong id="todoStatDone">0</strong></div>
+        </div>
+        <div id="todoStats" class="sub todo-stats-line"></div>
         <div id="todoList" class="todo-list"></div>
       </section>
     </main>
 
-    <script src="./todo.js?v=20260401c"></script>
+    <script src="./todo.js?v=20260401d"></script>
   </body>
  </html>

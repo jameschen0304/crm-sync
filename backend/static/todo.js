@@ -111,6 +111,11 @@ function renderTodoList() {
   };
   const pending = Math.max(0, stats.total - stats.done);
   statsEl.textContent = `总计 ${stats.total} · 待办 ${pending} · 今天到期 ${stats.today} · 逾期 ${stats.overdue} · 完成 ${stats.done}`;
+  if (q("todoStatTotal")) q("todoStatTotal").textContent = String(stats.total);
+  if (q("todoStatPending")) q("todoStatPending").textContent = String(pending);
+  if (q("todoStatToday")) q("todoStatToday").textContent = String(stats.today);
+  if (q("todoStatOverdue")) q("todoStatOverdue").textContent = String(stats.overdue);
+  if (q("todoStatDone")) q("todoStatDone").textContent = String(stats.done);
 
   const filtered = todoItems.filter((item) => {
     const s = todoStatus(item, todayStr);

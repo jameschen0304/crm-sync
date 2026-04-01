@@ -42,6 +42,11 @@ class Company(Base):
     follow_up_stage: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     next_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # 周一例行（独立于主跟进流程）
+    monday_routine_enabled: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    monday_next_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    monday_last_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    monday_last_follow_up_note: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     last_follow_up_channel: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     last_follow_up_note: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     follow_up_history: Mapped[Optional[str]] = mapped_column(String(8000), nullable=True)
@@ -81,6 +86,10 @@ def ensure_schema():
         add("follow_up_stage", "follow_up_stage VARCHAR(32)")
         add("next_follow_up_at", "next_follow_up_at DATETIME")
         add("last_follow_up_at", "last_follow_up_at DATETIME")
+        add("monday_routine_enabled", "monday_routine_enabled VARCHAR(8)")
+        add("monday_next_follow_up_at", "monday_next_follow_up_at DATETIME")
+        add("monday_last_follow_up_at", "monday_last_follow_up_at DATETIME")
+        add("monday_last_follow_up_note", "monday_last_follow_up_note VARCHAR(2000)")
         add("last_follow_up_channel", "last_follow_up_channel VARCHAR(32)")
         add("last_follow_up_note", "last_follow_up_note VARCHAR(2000)")
         add("follow_up_history", "follow_up_history VARCHAR(8000)")
@@ -129,6 +138,14 @@ def compute_next_follow_up_at(stage: str, from_dt: datetime) -> Optional[datetim
     return d
 
 
+def compute_next_monday_at(from_dt: datetime) -> datetime:
+    """固定排到下一个周一（今天是周一也排到下周一）。"""
+    delta = (7 - from_dt.weekday()) % 7
+    if delta == 0:
+        delta = 7
+    return from_dt + timedelta(days=delta)
+
+
 def migrate_follow_up_defaults() -> None:
     """历史客户：补全跟进阶段与下次跟进时间（与当前前端逻辑一致）。"""
     valid_stages = set(FOLLOW_UP_STAGE_DAYS.keys())
@@ -138,9 +155,24 @@ def migrate_follow_up_defaults() -> None:
         changed = False
         for row in rows:
             stage = (row.follow_up_stage or "").strip() or None
+            # 兼容旧版本把“周一例行”写在主阶段里的数据：迁移到独立字段
+            if stage == "周一例行":
+                if row.monday_routine_enabled != "1":
+                    row.monday_routine_enabled = "1"
+                    changed = True
+                if row.monday_next_follow_up_at is None:
+                    row.monday_next_follow_up_at = compute_next_monday_at(now)
+                    changed = True
+                stage = None
             if not stage or stage not in valid_stages:
                 row.follow_up_stage = "新线索"
                 stage = "新线索"
+                changed = True
+            if row.monday_routine_enabled == "1" and row.monday_next_follow_up_at is None:
+                row.monday_next_follow_up_at = compute_next_monday_at(now)
+                changed = True
+            if row.monday_routine_enabled != "1" and row.monday_next_follow_up_at is not None:
+                row.monday_next_follow_up_at = None
                 changed = True
             if stage == "暂停":
                 if row.next_follow_up_at is not None:
@@ -207,6 +239,10 @@ class CompanyIn(BaseModel):
     follow_up_stage: Optional[str] = Field(default=None, max_length=32)
     next_follow_up_at: Optional[datetime] = None
     last_follow_up_at: Optional[datetime] = None
+    monday_routine_enabled: Optional[str] = Field(default=None, max_length=8)
+    monday_next_follow_up_at: Optional[datetime] = None
+    monday_last_follow_up_at: Optional[datetime] = None
+    monday_last_follow_up_note: Optional[str] = Field(default=None, max_length=2000)
     last_follow_up_channel: Optional[str] = Field(default=None, max_length=32)
     last_follow_up_note: Optional[str] = Field(default=None, max_length=2000)
     last_won_raw: Optional[str] = Field(default=None, max_length=2000)
