@@ -47,6 +47,7 @@ class Company(Base):
     monday_next_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     monday_last_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     monday_last_follow_up_note: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    monday_follow_up_history: Mapped[Optional[str]] = mapped_column(String(8000), nullable=True)
     last_follow_up_channel: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     last_follow_up_note: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     follow_up_history: Mapped[Optional[str]] = mapped_column(String(8000), nullable=True)
@@ -90,6 +91,7 @@ def ensure_schema():
         add("monday_next_follow_up_at", "monday_next_follow_up_at DATETIME")
         add("monday_last_follow_up_at", "monday_last_follow_up_at DATETIME")
         add("monday_last_follow_up_note", "monday_last_follow_up_note VARCHAR(2000)")
+        add("monday_follow_up_history", "monday_follow_up_history VARCHAR(8000)")
         add("last_follow_up_channel", "last_follow_up_channel VARCHAR(32)")
         add("last_follow_up_note", "last_follow_up_note VARCHAR(2000)")
         add("follow_up_history", "follow_up_history VARCHAR(8000)")
@@ -265,6 +267,7 @@ class CompanyIn(BaseModel):
     monday_next_follow_up_at: Optional[datetime] = None
     monday_last_follow_up_at: Optional[datetime] = None
     monday_last_follow_up_note: Optional[str] = Field(default=None, max_length=2000)
+    monday_follow_up_history: Optional[str] = Field(default=None, max_length=8000)
     last_follow_up_channel: Optional[str] = Field(default=None, max_length=32)
     last_follow_up_note: Optional[str] = Field(default=None, max_length=2000)
     last_won_raw: Optional[str] = Field(default=None, max_length=2000)
@@ -357,6 +360,7 @@ def update_company(company_id: int, payload: CompanyIn, db: Session = Depends(ge
         new_line = f"[{follow_time}] {follow_channel} | {follow_note}"
         history = (row.follow_up_history or "").strip()
         row.follow_up_history = f"{history}\n{new_line}" if history else new_line
+    # 周一例行：仅覆盖 monday_last_* 字段，不追加独立历史（与主跟进「跟进历史」区分）
     db.add(row)
     db.commit()
     db.refresh(row)
