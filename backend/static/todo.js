@@ -13,7 +13,7 @@ const HOLIDAY_EVENTS = [
   { m: 4, d: 13, name: "宋干节", market: "泰国", factory: "红厂", give: "4月10日" },
   { m: 5, d: 1, name: "国际劳动节", market: "全球", factory: "红厂", give: "4月28日" },
   { m: 5, d: 25, name: "非洲日 (Africa Day)", market: "全非洲", factory: "康宁", give: "5月22日" },
-  { m: 6, d: 27, name: "古尔邦节 (Eid al-Adha)", market: "中东/东南亚/伊朗", factory: "红厂", give: "6月24日" },
+  { m: 5, d: 27, name: "古尔邦节 (Eid al-Adha)", market: "中东/东南亚/伊朗", factory: "红厂", give: "5月24日" },
   { m: 8, d: 15, name: "韩国光复节", market: "韩国", factory: "红厂", give: "8月12日" },
   { m: 9, d: 7, name: "巴西独立日", market: "拉美", factory: "康宁", give: "9月4日" },
   { m: 9, d: 23, name: "沙特国庆日", market: "中东(沙特)", factory: "康宁", give: "9月20日" },
@@ -25,6 +25,56 @@ const HOLIDAY_EVENTS = [
   { m: 12, d: 22, name: "冬至 / 雅尔达之夜", market: "伊朗", factory: "康宁", give: "12月19日" },
   { m: 12, d: 25, name: "圣诞节 (Christmas)", market: "全球", factory: "红厂", give: "12月22日" },
 ];
+
+// 仅基于你给的 2026 年参考日期做一次性补充节点（去重 key 里包含 due_date）
+const EXTRA_2026_EVENTS = [
+  { date: "2026-02-18", name: "斋月 (Ramadan) 开始", market: "土耳其/埃及/伊拉克/印尼", factory: "", action: "简单祝愿；斋月期间不要催单。" },
+  { date: "2026-03-20", name: "开斋节 (Eid al-Fitr)", market: "全穆斯林地区", factory: "", action: "最高级别；结款/签单高峰，提前准备。" },
+  { date: "2026-04-03", name: "复活节 (Easter) 提前2天", market: "意大利/英国/菲律宾", factory: "", action: "重要节点；提前2天发（对菲律宾为“圣周”）。" },
+  { date: "2026-05-27", name: "宰牲节 (Eid al-Adha)", market: "全穆斯林地区", factory: "", action: "最高级别；放假+物流停滞，提前安排。" },
+  { date: "2026-07-15", name: "伊斯兰新年", market: "埃及/沙特/伊拉克（约）", factory: "", action: "商务问候，简单即可。" },
+  { date: "2026-07-01", name: "暑假追单节点（意大利等）", market: "意大利/法国/西班牙（约）", factory: "", action: "8月客户易失联；7月要提前追单。" },
+  { date: "2026-06-12", name: "菲律宾独立日", market: "菲律宾（约）", factory: "", action: "简单祝福即可。" },
+  { date: "2026-08-17", name: "印尼独立日", market: "印尼（约）", factory: "", action: "简单祝福即可。" },
+];
+
+function upsertTodoByKey(key, patch) {
+  const idx = todoItems.findIndex((x) => x.key === key);
+  if (idx >= 0) {
+    todoItems[idx] = { ...todoItems[idx], ...patch };
+    return false;
+  }
+  const nowIso = new Date().toISOString();
+  todoItems.unshift({
+    id: todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1,
+    key,
+    done: false,
+    created_at: nowIso,
+    updated_at: nowIso,
+    ...patch,
+  });
+  return true;
+}
+
+function seedExtra2026Todos() {
+  for (const e of EXTRA_2026_EVENTS) {
+    const due = e.date;
+    const key = `extra2026:${due}:${e.name}`;
+    if (!todoItems.some((x) => x.key === key)) {
+      const textBase = `西方/中东节点：${e.name}`;
+      const text2 = e.action ? ` ${e.action}` : "";
+      const text = (textBase + text2 + (e.market ? `（${e.market}）` : "")).replace(/\s+/g, " ").trim();
+      const textTrim = text.length > 160 ? text.slice(0, 157) + "..." : text;
+      upsertTodoByKey(key, {
+        text: textTrim,
+        due_date: due,
+        repeat: "none",
+        priority: "medium",
+        meta: e.factory ? `制作：${e.factory}` : "",
+      });
+    }
+  }
+}
 
 // 西方传统节日（当天提醒：T-0）
 const WESTERN_SAME_DAY_EVENTS = [
@@ -419,4 +469,5 @@ q("btnTodoClearDone").addEventListener("click", () => {
 todoItems = loadTodoItems();
 seedHolidayTodos();
 seedWesternSameDayTodos();
+seedExtra2026Todos();
 renderTodoList();
