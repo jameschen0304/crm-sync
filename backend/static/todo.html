@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
     <title>每日 To-Do</title>
-    <link rel="stylesheet" href="./styles.css?v=20260401d" />
+    <link rel="stylesheet" href="./styles.css?v=20260402a" />
   </head>
   <body>
     <main class="wrap">
@@ -20,7 +20,7 @@
       <section class="panel todo-panel">
         <div class="todo-headline">
           <h2>今日任务清单</h2>
-          <p class="sub">支持不重复/重复任务，勾选完成后自动生成下一条（按你的重复规则）。</p>
+          <p class="sub">默认只显示今天要做的（未完成且截止≤今天或未设截止）；未来任务在筛选里选「全部」。</p>
         </div>
         <form id="todoForm" class="todo-form">
           <input id="todoText" class="input" maxlength="160" placeholder="输入今天要完成的任务..." required />
@@ -66,6 +66,6 @@
       </section>
     </main>
 
-    <script src="./todo.js?v=20260401d"></script>
+    <script src="./todo.js?v=20260402a"></script>
   </body>
  </html>

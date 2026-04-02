@@ -101,7 +101,7 @@ function renderTodoList() {
   const listEl = q("todoList");
   const statsEl = q("todoStats");
   const todayStr = getTodayDateStr();
-  const filter = (q("todoFilter")?.value || "all").trim();
+  const filter = (q("todoFilter")?.value || "today_do").trim();
 
   const stats = {
     total: todoItems.length,
@@ -119,6 +119,11 @@ function renderTodoList() {
 
   const filtered = todoItems.filter((item) => {
     const s = todoStatus(item, todayStr);
+    if (filter === "today_do") {
+      if (item.done) return false;
+      if (!item.due_date) return true;
+      return item.due_date <= todayStr;
+    }
     if (filter === "all") return true;
     if (filter === "pending") return !item.done;
     if (filter === "done") return item.done;
@@ -126,7 +131,11 @@ function renderTodoList() {
   });
 
   if (!filtered.length) {
-    listEl.innerHTML = `<div class="todo-empty">暂无任务，先添加一条吧。</div>`;
+    const emptyHint =
+      filter === "today_do"
+        ? "今天没有待办。未来日期的任务请切换到「全部」或「待完成」查看。"
+        : "暂无任务，先添加一条吧。";
+    listEl.innerHTML = `<div class="todo-empty">${emptyHint}</div>`;
     return;
   }
 
