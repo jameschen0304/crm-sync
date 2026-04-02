@@ -1461,6 +1461,7 @@ q("last_won_raw").addEventListener("input", () => {
 q("companyForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const id = q("id").value ? Number(q("id").value) : null;
+  const creating = !id;
   const payload = {
     name: q("name").value.trim(),
     timezone: q("timezone").value.trim(),
@@ -1492,6 +1493,16 @@ q("companyForm").addEventListener("submit", async (ev) => {
     return;
   }
 
+  // 新增客户去重：公司名（忽略大小写）已存在则提示并阻止保存
+  if (creating) {
+    const newName = String(payload.name || "").trim().toLowerCase();
+    const exists = companies.some((c) => String(c.name || "").trim().toLowerCase() === newName);
+    if (exists) {
+      setMsg("该公司名字已存在，请检查是否重复后再保存。", "error");
+      return;
+    }
+  }
+
   if (!payload.next_follow_up_at && payload.follow_up_stage && payload.follow_up_stage !== "暂停") {
     payload.next_follow_up_at = computeNextFollowUpISO(payload.follow_up_stage, new Date());
   }
@@ -1519,7 +1530,11 @@ q("companyForm").addEventListener("submit", async (ev) => {
     await refresh();
   } catch (e) {
     const msg = String(e?.message || e);
-    setMsg(`保存失败：${msg}`, "error");
+    if (msg.includes("Company name already exists") || msg.includes("409")) {
+      setMsg("该公司名字已存在，请更换名称或编辑已有客户。", "error");
+    } else {
+      setMsg(`保存失败：${msg}`, "error");
+    }
     console.error(e);
   }
 });
