@@ -26,6 +26,20 @@ const HOLIDAY_EVENTS = [
   { m: 12, d: 25, name: "圣诞节 (Christmas)", market: "全球", factory: "红厂", give: "12月22日" },
 ];
 
+// 西方传统节日（当天提醒：T-0）
+const WESTERN_SAME_DAY_EVENTS = [
+  { m: 1, d: 26, name: "澳大利亚国庆日 (Australia Day)", market: "澳洲", factory: "红厂", give: "" },
+  { m: 2, d: 14, name: "情人节 (Valentine's Day)", market: "欧美", factory: "康宁", give: "" },
+  { m: 3, d: 17, name: "圣帕特里克节 (St. Patrick's Day)", market: "欧美", factory: "红厂", give: "" },
+  { m: 7, d: 1, name: "加拿大国庆日 (Canada Day)", market: "加拿大", factory: "康宁", give: "" },
+  { m: 7, d: 4, name: "美国独立日 (Independence Day)", market: "美国", factory: "红厂", give: "" },
+  { m: 10, d: 31, name: "万圣节 (Halloween)", market: "欧美/全球", factory: "康宁", give: "" },
+  { m: 11, d: 5, name: "盖伊福克斯之夜 (Guy Fawkes Night)", market: "英国", factory: "红厂", give: "" },
+  { m: 11, d: 11, name: "第一次世界大战停战纪念日 (Remembrance Day)", market: "英联邦", factory: "康宁", give: "" },
+  { m: 12, d: 26, name: "节礼日 (Boxing Day)", market: "英联邦", factory: "红厂", give: "" },
+  { m: 12, d: 31, name: "新年前夜 (New Year's Eve)", market: "欧美/全球", factory: "康宁", give: "" },
+];
+
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -117,6 +131,49 @@ function seedHolidayTodos() {
     saveTodoItems();
   }
   localStorage.setItem(TODO_HOLIDAY_SEED_FLAG_KEY, "1");
+}
+
+function seedWesternSameDayTodos() {
+  const existingKeys = new Set(todoItems.map((x) => x.key).filter(Boolean));
+  const now = new Date().toISOString();
+
+  const today = new Date();
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+  const curYear = today.getFullYear();
+
+  let nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
+  let added = 0;
+
+  for (const e of WESTERN_SAME_DAY_EVENTS) {
+    for (let year = curYear; year <= curYear + 2; year += 1) {
+      const holiday = new Date(year, e.m - 1, e.d, 12, 0, 0);
+      if (holiday.getTime() < todayMid.getTime()) continue;
+
+      const due = dateToStr(holiday);
+      const key = `${year}-${e.m}-${e.d}-${e.name}-T0`;
+      if (!existingKeys.has(key)) {
+        const text = `西方节日当天提醒：${e.name}（${e.market}）`;
+        const textTrim = text.length > 160 ? text.slice(0, 157) + "..." : text;
+        todoItems.unshift({
+          id: nextId++,
+          key,
+          text: textTrim,
+          due_date: due,
+          repeat: "none",
+          priority: "medium",
+          done: false,
+          created_at: now,
+          updated_at: now,
+          meta: `制作：${e.factory}`,
+        });
+        existingKeys.add(key);
+        added += 1;
+      }
+      break;
+    }
+  }
+
+  if (added > 0) saveTodoItems();
 }
 
 function resetTodoForm() {
@@ -361,4 +418,5 @@ q("btnTodoClearDone").addEventListener("click", () => {
 
 todoItems = loadTodoItems();
 seedHolidayTodos();
+seedWesternSameDayTodos();
 renderTodoList();
