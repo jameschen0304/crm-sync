@@ -1,6 +1,44 @@
 const TODO_DATA_KEY = "crm_todo_items_v1";
 let todoItems = [];
 let editingTodoId = null;
+const TODO_HOLIDAY_SEED_FLAG_KEY = "crm_todo_holiday_seeded_v1";
+
+const HOLIDAY_EVENTS = [
+  { m: 1, d: 1, name: "元旦 (New Year)", market: "全球", factory: "红厂", give: "12月29日" },
+  { m: 2, d: 17, name: "中国春节", market: "全球", factory: "红厂", give: "2月14日" },
+  { m: 3, d: 6, name: "加纳独立日", market: "西非", factory: "康宁", give: "3月3日" },
+  { m: 3, d: 8, name: "妇女节", market: "全球", factory: "康宁", give: "3月5日" },
+  { m: 3, d: 20, name: "开斋节", market: "中东/东南亚/伊朗", factory: "红厂", give: "3月17日" },
+  { m: 3, d: 21, name: "诺鲁孜节 (波斯新年)", market: "中亚/土耳其/伊朗", factory: "康宁", give: "3月18日" },
+  { m: 4, d: 13, name: "宋干节", market: "泰国", factory: "红厂", give: "4月10日" },
+  { m: 5, d: 1, name: "国际劳动节", market: "全球", factory: "红厂", give: "4月28日" },
+  { m: 5, d: 25, name: "非洲日 (Africa Day)", market: "全非洲", factory: "康宁", give: "5月22日" },
+  { m: 6, d: 27, name: "古尔邦节 (Eid al-Adha)", market: "中东/东南亚/伊朗", factory: "红厂", give: "6月24日" },
+  { m: 8, d: 15, name: "韩国光复节", market: "韩国", factory: "红厂", give: "8月12日" },
+  { m: 9, d: 7, name: "巴西独立日", market: "拉美", factory: "康宁", give: "9月4日" },
+  { m: 9, d: 23, name: "沙特国庆日", market: "中东(沙特)", factory: "康宁", give: "9月20日" },
+  { m: 10, d: 1, name: "中国国庆日", market: "全球", factory: "钢铁", give: "9月28日" },
+  { m: 10, d: 29, name: "土耳其共和国日", market: "土耳其", factory: "康宁", give: "10月26日" },
+  { m: 11, d: 26, name: "感恩节 (Thanksgiving)", market: "北美/全球", factory: "红厂", give: "11月23日" },
+  { m: 12, d: 2, name: "阿联酋国庆日", market: "中东", factory: "康宁", give: "11月29日" },
+  { m: 12, d: 12, name: "肯尼亚独立日", market: "东非", factory: "康宁", give: "12月9日" },
+  { m: 12, d: 22, name: "冬至 / 雅尔达之夜", market: "伊朗", factory: "康宁", give: "12月19日" },
+  { m: 12, d: 25, name: "圣诞节 (Christmas)", market: "全球", factory: "红厂", give: "12月22日" },
+];
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function dateToStr(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function addDays(d, days) {
+  const nd = new Date(d);
+  nd.setDate(nd.getDate() + days);
+  return nd;
+}
 
 function q(id) {
   return document.getElementById(id);
@@ -23,6 +61,62 @@ function loadTodoItems() {
 
 function saveTodoItems() {
   localStorage.setItem(TODO_DATA_KEY, JSON.stringify(todoItems));
+}
+
+function seedHolidayTodos() {
+  const existingKeys = new Set(todoItems.map((x) => x.key).filter(Boolean));
+  const now = new Date().toISOString();
+
+  const today = new Date();
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+  const curYear = today.getFullYear();
+
+  // 从当前年份开始，只为“提醒日未过”的事件生成
+  let nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
+  let added = 0;
+
+  for (const e of HOLIDAY_EVENTS) {
+    for (let t = 3; t >= 1; t -= 1) {
+      // t=3 代表“到期前三天”（提醒日=节日当天-3）
+      // 找到第一年的提醒日未过
+      let year = curYear;
+      for (let safety = 0; safety < 3; safety += 1) {
+        const holiday = new Date(year, e.m - 1, e.d, 12, 0, 0);
+        const remind = addDays(holiday, -t);
+        if (remind.getTime() >= todayMid.getTime()) {
+          const due = dateToStr(remind);
+          const key = `${year}-${e.m}-${e.d}-${e.name}-T${t}`;
+          if (!existingKeys.has(key)) {
+            const prefix = `节日节点：${e.name}`;
+            const suffix = `（T-${t}）`;
+            const baseText = `${prefix}${suffix} - ${e.market}`;
+            const text = baseText.length > 160 ? baseText.slice(0, 157) + "..." : baseText;
+            todoItems.unshift({
+              id: nextId++,
+              key,
+              text,
+              due_date: due,
+              repeat: "none",
+              priority: "medium",
+              done: false,
+              created_at: now,
+              updated_at: now,
+              meta: `给到日期：${e.give}；制作：${e.factory}`,
+            });
+            existingKeys.add(key);
+            added += 1;
+          }
+          break;
+        }
+        year += 1;
+      }
+    }
+  }
+
+  if (added > 0) {
+    saveTodoItems();
+  }
+  localStorage.setItem(TODO_HOLIDAY_SEED_FLAG_KEY, "1");
 }
 
 function resetTodoForm() {
@@ -266,4 +360,5 @@ q("btnTodoClearDone").addEventListener("click", () => {
 });
 
 todoItems = loadTodoItems();
+seedHolidayTodos();
 renderTodoList();
