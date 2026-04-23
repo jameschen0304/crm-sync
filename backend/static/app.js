@@ -1485,7 +1485,22 @@ async function importLocalDataFromFile(file) {
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
 }
 
+function removeLegacyApiBaseUi() {
+  try {
+    document.getElementById("btnSaveApiBase")?.remove();
+    const inp = document.getElementById("crmApiBase");
+    if (inp) {
+      const lab = inp.closest("label");
+      if (lab) lab.remove();
+      else inp.remove();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function initCloudSyncForm() {
+  removeLegacyApiBaseUi();
   const elE = q("crmLoginEmail");
   try {
     ["crm_api_key", "crm_auth_mode", "crm_account_email"].forEach((k) => {

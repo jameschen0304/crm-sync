@@ -11,9 +11,10 @@
       (function () {
         try {
           var t = Date.parse(document.lastModified);
-          window.__CRM_ASSET_V = !Number.isNaN(t) ? String(t) : String(Date.now());
+          window.__CRM_ASSET_V =
+            (!Number.isNaN(t) ? String(t) : String(Date.now())) + "-v5";
         } catch (e) {
-          window.__CRM_ASSET_V = String(Date.now());
+          window.__CRM_ASSET_V = String(Date.now()) + "-v5";
         }
         document.write(
           '<link rel="stylesheet" href="./styles.css?v=' +
@@ -116,10 +117,6 @@
               <button type="button" id="btnAuthRegister" class="btn btn-secondary">注册</button>
             </div>
             <button type="button" id="btnAuthLogout" class="btn btn-secondary btn-compact">退出登录</button>
-            <p class="sidebar-cloud-note">
-              后端地址在页面底部 <code>window.CRM_API_BASE</code> 或浏览器 <code>localStorage.crm_api_base</code> 配置。服务器需设置
-              <code>CRM_JWT_SECRET</code>。
-            </p>
           </div>
         </aside>
 
