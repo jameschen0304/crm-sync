@@ -35,32 +35,6 @@
       <section class="app-shell">
         <aside class="panel sidebar">
           <h2>筛选与操作</h2>
-          <div class="sidebar-block sidebar-cloud">
-            <h3 class="sidebar-subh">云端同步</h3>
-            <label class="label-compact"
-              >API 根地址
-              <input
-                id="crmApiBase"
-                class="input"
-                type="url"
-                inputmode="url"
-                placeholder="https://你的服务.onrender.com"
-                autocomplete="off"
-              />
-            </label>
-            <label class="label-compact"
-              >API 密钥
-              <input
-                id="crmApiKey"
-                class="input"
-                type="password"
-                placeholder="与 CRM_API_KEY 一致"
-                autocomplete="off"
-              />
-            </label>
-            <button type="button" id="btnSaveCloudSync" class="btn">保存并拉取云端列表</button>
-            <p class="sidebar-cloud-note">各台电脑填同一地址与密钥即共用服务器数据；密钥仅存本机浏览器。</p>
-          </div>
           <div class="sidebar-block">
             <label>
               地区
@@ -113,6 +87,52 @@
             <button id="btnExportData" class="btn btn-secondary">导出数据(JSON)</button>
             <button id="btnImportData" class="btn btn-secondary">导入数据(JSON)</button>
             <input id="importDataFile" type="file" accept="application/json" style="display:none;" />
+          </div>
+          <div class="sidebar-block sidebar-cloud">
+            <h3 class="sidebar-subh">云端同步</h3>
+            <label class="label-compact"
+              >登录方式
+              <select id="crmAuthMode" class="select">
+                <option value="key">API 密钥</option>
+                <option value="email">邮箱账号</option>
+              </select>
+            </label>
+            <div id="crmAuthEmailWrap" class="crm-auth-email-wrap is-hidden">
+              <label class="label-compact"
+                >账号邮箱
+                <input
+                  id="crmAccountEmail"
+                  class="input"
+                  type="email"
+                  inputmode="email"
+                  placeholder="name@company.com"
+                  autocomplete="email"
+                />
+              </label>
+            </div>
+            <label class="label-compact"
+              >API 根地址
+              <input
+                id="crmApiBase"
+                class="input"
+                type="url"
+                inputmode="url"
+                placeholder="https://你的服务.onrender.com"
+                autocomplete="off"
+              />
+            </label>
+            <label class="label-compact"
+              >API 密钥
+              <input
+                id="crmApiKey"
+                class="input"
+                type="password"
+                placeholder="与 CRM_API_KEY 一致"
+                autocomplete="off"
+              />
+            </label>
+            <button type="button" id="btnSaveCloudSync" class="btn">保存并拉取云端列表</button>
+            <p class="sidebar-cloud-note">邮箱模式用邮箱标识账号；鉴权仍靠下方密钥。各台填同一套即可共用数据。</p>
           </div>
         </aside>
 

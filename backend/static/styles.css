@@ -27,7 +27,7 @@ h1{margin:0;font-size:28px}
 .sub{margin:4px 0 0;color:var(--muted);font-size:13px}
 
 .app-shell{display:grid;grid-template-columns:290px 1fr;gap:12px}
-.sidebar{position:sticky;top:12px;align-self:start}
+.sidebar{position:sticky;top:12px;align-self:stretch;display:flex;flex-direction:column;min-height:0;height:100%}
 .sidebar-block{display:grid;gap:10px;margin-bottom:10px}
 .main-content{display:grid;gap:0}
 
@@ -50,6 +50,8 @@ h2{margin:0 0 10px;font-size:15px;color:#1c4f36}
 .sidebar-cloud .label-compact .input{margin-top:4px}
 .sidebar-cloud #btnSaveCloudSync{margin-top:10px;width:100%}
 .sidebar-cloud-note{margin:8px 0 0;font-size:11px;color:var(--muted);line-height:1.45}
+.sidebar-cloud .is-hidden{display:none!important}
+.sidebar-cloud{margin-top:auto;padding-top:12px;border-top:1px dashed var(--line)}
 
 .stats-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
 .stat-card{border:1px solid var(--line);background:var(--panel-soft);border-radius:10px;padding:10px}
@@ -307,7 +309,7 @@ label{display:grid;gap:6px;color:#4b7662;font-size:12.5px}
 
 @media (max-width: 980px){
   .app-shell{grid-template-columns:1fr}
-  .sidebar{position:static}
+  .sidebar{position:static;height:auto}
   .list-detail-layout{grid-template-columns:1fr}
   .detail-side{position:static}
   .stats-grid{grid-template-columns:1fr 1fr}
