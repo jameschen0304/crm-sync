@@ -35,6 +35,32 @@
       <section class="app-shell">
         <aside class="panel sidebar">
           <h2>筛选与操作</h2>
+          <div class="sidebar-block sidebar-cloud">
+            <h3 class="sidebar-subh">云端同步</h3>
+            <label class="label-compact"
+              >API 根地址
+              <input
+                id="crmApiBase"
+                class="input"
+                type="url"
+                inputmode="url"
+                placeholder="https://你的服务.onrender.com"
+                autocomplete="off"
+              />
+            </label>
+            <label class="label-compact"
+              >API 密钥
+              <input
+                id="crmApiKey"
+                class="input"
+                type="password"
+                placeholder="与 CRM_API_KEY 一致"
+                autocomplete="off"
+              />
+            </label>
+            <button type="button" id="btnSaveCloudSync" class="btn">保存并拉取云端列表</button>
+            <p class="sidebar-cloud-note">各台电脑填同一地址与密钥即共用服务器数据；密钥仅存本机浏览器。</p>
+          </div>
           <div class="sidebar-block">
             <label>
               地区

@@ -1,5 +1,13 @@
-const API_KEY = localStorage.getItem("crm_api_key") || "dev-key-change-me";
-const HEADERS = { "Content-Type": "application/json", "X-API-Key": API_KEY };
+function apiHeaders() {
+  const key = (() => {
+    try {
+      return localStorage.getItem("crm_api_key") || "dev-key-change-me";
+    } catch {
+      return "dev-key-change-me";
+    }
+  })();
+  return { "Content-Type": "application/json", "X-API-Key": key };
+}
 
 /** 纯静态部署（如 GitHub Pages）时指向 FastAPI 根地址，不要末尾斜杠。优先 window.CRM_API_BASE，其次 localStorage crm_api_base */
 function apiOrigin() {
@@ -1237,7 +1245,7 @@ async function apiGet(path) {
     if (path === "/api/companies") return localListCompanies();
     throw new Error(`本地模式不支持 GET ${path}`);
   }
-  const res = await fetch(resolveApiUrl(path), { headers: HEADERS });
+  const res = await fetch(resolveApiUrl(path), { headers: apiHeaders() });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1246,7 +1254,7 @@ async function apiPost(path, body) {
     if (path === "/api/companies") return localCreateCompany(body);
     throw new Error(`本地模式不支持 POST ${path}`);
   }
-  const res = await fetch(resolveApiUrl(path), { method: "POST", headers: HEADERS, body: JSON.stringify(body) });
+  const res = await fetch(resolveApiUrl(path), { method: "POST", headers: apiHeaders(), body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1256,7 +1264,7 @@ async function apiPut(path, body) {
     if (!m) throw new Error(`本地模式不支持 PUT ${path}`);
     return localUpdateCompany(Number(m[1]), body);
   }
-  const res = await fetch(resolveApiUrl(path), { method: "PUT", headers: HEADERS, body: JSON.stringify(body) });
+  const res = await fetch(resolveApiUrl(path), { method: "PUT", headers: apiHeaders(), body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1266,7 +1274,7 @@ async function apiDelete(path) {
     if (!m) throw new Error(`本地模式不支持 DELETE ${path}`);
     return localDeleteCompany(Number(m[1]));
   }
-  const res = await fetch(resolveApiUrl(path), { method: "DELETE", headers: HEADERS });
+  const res = await fetch(resolveApiUrl(path), { method: "DELETE", headers: apiHeaders() });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1349,7 +1357,20 @@ function localDeleteCompany(id) {
   return { ok: true };
 }
 
+function skipHostedSnapshotSeed() {
+  try {
+    const h = (window.location.hostname || "").toLowerCase();
+    if (h.endsWith(".github.io")) return true;
+    if (h.endsWith(".netlify.app")) return true;
+    if (h.endsWith(".vercel.app")) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 async function tryAutoSeedFromHostedJSON() {
+  if (skipHostedSnapshotSeed()) return false;
   const alreadySeeded = localStorage.getItem(AUTO_SEED_FLAG_KEY) === "1";
   if (alreadySeeded && localListCompanies().length > 0) return false;
   if (localListCompanies().length > 0) {
@@ -1419,6 +1440,30 @@ function exportLocalData() {
   setMsg(`导出完成，共 ${rows.length} 条客户。`, "ok");
 }
 
+/** 已配置云端 API 时导出当前内存中的服务器列表，否则导出本地离线库 */
+function exportCurrentData() {
+  if (apiOrigin()) {
+    const rows = Array.isArray(companies) ? companies : [];
+    const payload = {
+      exported_at: new Date().toISOString(),
+      version: 1,
+      rows,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `crm-cloud-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setMsg(`已导出云端当前列表，共 ${rows.length} 条客户。`, "ok");
+    return;
+  }
+  exportLocalData();
+}
+
 async function importLocalDataFromFile(file) {
   const text = await file.text();
   let parsed;
@@ -1437,6 +1482,24 @@ async function importLocalDataFromFile(file) {
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
 }
 
+function trimApiBaseInput(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+function initCloudSyncForm() {
+  const elB = q("crmApiBase");
+  const elK = q("crmApiKey");
+  if (!elB || !elK) return;
+  try {
+    elB.value = localStorage.getItem("crm_api_base") || "";
+    elK.value = localStorage.getItem("crm_api_key") || "";
+  } catch {
+    /* ignore */
+  }
+}
+
 async function refresh() {
   const hadRemote = Boolean(apiOrigin());
   if (hadRemote) USE_LOCAL_MODE = false;
@@ -1453,6 +1516,8 @@ async function refresh() {
     migrateLocalFollowUpDefaults();
     companies = localListCompanies();
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
+    else if (skipHostedSnapshotSeed())
+      setMsg("未连接服务器。多台电脑要同一数据请在侧栏填写 API 根地址与密钥后保存。", "error");
     else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
     renderList();
     startReminderLoop(60000);
@@ -1464,7 +1529,48 @@ q("btnEnableNotif").addEventListener("click", async () => {
   setMsg(ok ? "系统通知已开启（或已授权）。" : "系统通知未授权，将使用弹窗提醒。", ok ? "ok" : "error");
 });
 q("btnRefresh").addEventListener("click", refresh);
-q("btnExportData").addEventListener("click", exportLocalData);
+q("btnSaveCloudSync").addEventListener("click", async () => {
+  const base = trimApiBaseInput(q("crmApiBase").value);
+  let key = (q("crmApiKey").value || "").trim();
+  if (!key) {
+    try {
+      key = (localStorage.getItem("crm_api_key") || "").trim();
+    } catch {
+      key = "";
+    }
+  }
+  if (!base) {
+    try {
+      localStorage.removeItem("crm_api_base");
+    } catch {
+      /* ignore */
+    }
+    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    USE_LOCAL_MODE = true;
+    await refresh();
+    setMsg("已清除 API 根地址。", "ok");
+    return;
+  }
+  if (!key) {
+    setMsg("请填写 API 密钥（与服务器 CRM_API_KEY 一致），或留空密钥但需已在本机保存过密钥。", "error");
+    return;
+  }
+  try {
+    localStorage.setItem("crm_api_base", base);
+    localStorage.setItem("crm_api_key", key);
+    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    USE_LOCAL_MODE = false;
+    await refresh();
+    if (USE_LOCAL_MODE) {
+      setMsg("无法连接服务器，请核对根地址、密钥与跨域（CORS）配置。", "error");
+      return;
+    }
+    setMsg("已保存云端连接，列表与服务器一致。", "ok");
+  } catch (e) {
+    setMsg(`保存失败：${String(e?.message || e)}`, "error");
+  }
+});
+q("btnExportData").addEventListener("click", exportCurrentData);
 q("btnImportData").addEventListener("click", () => q("importDataFile").click());
 q("importDataFile").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
@@ -1652,4 +1758,5 @@ q("btnDetailEdit").addEventListener("click", () => {
   const editBtn = document.querySelector(`[data-edit="${currentDetailId}"]`);
   if (editBtn) editBtn.click();
 });
+initCloudSyncForm();
 refresh();
