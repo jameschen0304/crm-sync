@@ -1494,6 +1494,7 @@ function removeLegacyApiBaseUi() {
       if (lab) lab.remove();
       else inp.remove();
     }
+    document.querySelectorAll(".sidebar-cloud-note").forEach((el) => el.remove());
   } catch {
     /* ignore */
   }
@@ -1519,7 +1520,7 @@ function initCloudSyncForm() {
 async function authRegister() {
   const root = apiOrigin();
   if (!root) {
-    setMsg("未配置后端地址：在页面底部设置 window.CRM_API_BASE，或执行 localStorage.setItem(\"crm_api_base\",\"https://…\")。", "error");
+    setMsg("当前无法连接服务器，请稍后再试。", "error");
     return;
   }
   const email = (q("crmLoginEmail")?.value || "").trim();
@@ -1557,7 +1558,7 @@ async function authRegister() {
 async function authLogin() {
   const root = apiOrigin();
   if (!root) {
-    setMsg("未配置后端地址：在页面底部设置 window.CRM_API_BASE，或执行 localStorage.setItem(\"crm_api_base\",\"https://…\")。", "error");
+    setMsg("当前无法连接服务器，请稍后再试。", "error");
     return;
   }
   const email = (q("crmLoginEmail")?.value || "").trim();
@@ -1616,7 +1617,7 @@ async function refresh() {
     companies = localListCompanies();
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
     else if (skipHostedSnapshotSeed())
-      setMsg("未连接服务器。请配置后端地址并登录（见侧栏下方说明）。", "error");
+      setMsg("未连接服务器，请先登录。", "error");
     else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
     renderList();
     startReminderLoop(60000);

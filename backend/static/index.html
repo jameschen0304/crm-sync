@@ -12,9 +12,9 @@
         try {
           var t = Date.parse(document.lastModified);
           window.__CRM_ASSET_V =
-            (!Number.isNaN(t) ? String(t) : String(Date.now())) + "-v5";
+            (!Number.isNaN(t) ? String(t) : String(Date.now())) + "-v6";
         } catch (e) {
-          window.__CRM_ASSET_V = String(Date.now()) + "-v5";
+          window.__CRM_ASSET_V = String(Date.now()) + "-v6";
         }
         document.write(
           '<link rel="stylesheet" href="./styles.css?v=' +
@@ -345,7 +345,6 @@
     </main>
 
     <script>
-      // 静态页部署：在此填写 FastAPI 根地址（不要末尾 /）；也可在控制台执行 localStorage.setItem('crm_api_base','https://…')
       window.CRM_API_BASE = "";
     </script>
     <script>
