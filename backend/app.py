@@ -1,12 +1,15 @@
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 from sqlalchemy import DateTime, Integer, String, create_engine, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -21,7 +24,12 @@ else:
     DB_PATH = Path(__file__).with_name("crm.db")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-API_KEY = os.getenv("CRM_API_KEY", "dev-key-change-me")
+JWT_SECRET = os.getenv("CRM_JWT_SECRET", "dev-jwt-secret-change-me")
+JWT_ALG = "HS256"
+JWT_EXPIRE_DAYS = int(os.getenv("CRM_JWT_EXPIRE_DAYS", "30"))
+ALLOW_REGISTER = os.getenv("CRM_ALLOW_REGISTER", "true").lower() in ("1", "true", "yes")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 HOLIDAYS_MMDD = {
     "01-01",  # 元旦
     "05-01",  # 劳动节
@@ -31,6 +39,15 @@ HOLIDAYS_MMDD = {
 
 class Base(DeclarativeBase):
     pass
+
+
+class CrmUser(Base):
+    __tablename__ = "crm_user"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class Company(Base):
@@ -253,9 +270,38 @@ def get_db():
         yield session
 
 
-def require_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _valid_email(email: str) -> bool:
+    e = _normalize_email(email)
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", e))
+
+
+def issue_access_token(user_id: int) -> str:
+    exp = datetime.utcnow() + timedelta(days=JWT_EXPIRE_DAYS)
+    return jwt.encode({"sub": str(user_id), "exp": exp}, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def get_current_user(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    db: Session = Depends(get_db),
+) -> CrmUser:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Not logged in")
+    token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        uid = int(payload["sub"])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = db.get(CrmUser, uid)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 
 class CompanyIn(BaseModel):
@@ -290,6 +336,21 @@ class CompanyOut(CompanyIn):
     follow_up_history: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class RegisterBody(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class LoginBody(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 app = FastAPI(title="CRM Sync (Worktime Reminder)")
@@ -335,13 +396,38 @@ def index():
     return RedirectResponse(url="/static/index.html", status_code=302)
 
 
-@app.get("/api/companies", dependencies=[Depends(require_api_key)])
+@app.post("/api/auth/register", response_model=TokenOut)
+def auth_register(payload: RegisterBody, db: Session = Depends(get_db)) -> TokenOut:
+    email = _normalize_email(payload.email)
+    if not _valid_email(email):
+        raise HTTPException(status_code=400, detail="Invalid email")
+    if not ALLOW_REGISTER:
+        raise HTTPException(status_code=403, detail="Registration is disabled")
+    if db.scalar(select(CrmUser).where(CrmUser.email == email)):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    row = CrmUser(email=email, password_hash=pwd_context.hash(payload.password))
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return TokenOut(access_token=issue_access_token(row.id))
+
+
+@app.post("/api/auth/login", response_model=TokenOut)
+def auth_login(payload: LoginBody, db: Session = Depends(get_db)) -> TokenOut:
+    email = _normalize_email(payload.email)
+    user = db.scalar(select(CrmUser).where(CrmUser.email == email))
+    if not user or not pwd_context.verify(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Wrong email or password")
+    return TokenOut(access_token=issue_access_token(user.id))
+
+
+@app.get("/api/companies", dependencies=[Depends(get_current_user)])
 def list_companies(db: Session = Depends(get_db)) -> list[CompanyOut]:
     rows = db.scalars(select(Company).order_by(Company.name.asc())).all()
     return [CompanyOut.model_validate(r, from_attributes=True) for r in rows]
 
 
-@app.post("/api/companies", dependencies=[Depends(require_api_key)])
+@app.post("/api/companies", dependencies=[Depends(get_current_user)])
 def create_company(payload: CompanyIn, db: Session = Depends(get_db)) -> CompanyOut:
     exists = db.scalar(select(Company).where(Company.name == payload.name))
     if exists:
@@ -354,7 +440,7 @@ def create_company(payload: CompanyIn, db: Session = Depends(get_db)) -> Company
     return CompanyOut.model_validate(row, from_attributes=True)
 
 
-@app.put("/api/companies/{company_id}", dependencies=[Depends(require_api_key)])
+@app.put("/api/companies/{company_id}", dependencies=[Depends(get_current_user)])
 def update_company(company_id: int, payload: CompanyIn, db: Session = Depends(get_db)) -> CompanyOut:
     row = db.get(Company, company_id)
     if not row:
@@ -394,7 +480,7 @@ def update_company(company_id: int, payload: CompanyIn, db: Session = Depends(ge
     return CompanyOut.model_validate(row, from_attributes=True)
 
 
-@app.delete("/api/companies/{company_id}", dependencies=[Depends(require_api_key)])
+@app.delete("/api/companies/{company_id}", dependencies=[Depends(get_current_user)])
 def delete_company(company_id: int, db: Session = Depends(get_db)):
     row = db.get(Company, company_id)
     if not row:

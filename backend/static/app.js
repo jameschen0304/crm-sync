@@ -1,21 +1,11 @@
-const CRM_AUTH_MODE_KEY = "crm_auth_mode";
-const CRM_ACCOUNT_EMAIL_KEY = "crm_account_email";
+const CRM_JWT_KEY = "crm_jwt";
+const CRM_LAST_EMAIL_KEY = "crm_last_login_email";
 
 function apiHeaders() {
-  const key = (() => {
-    try {
-      return localStorage.getItem("crm_api_key") || "dev-key-change-me";
-    } catch {
-      return "dev-key-change-me";
-    }
-  })();
-  const h = { "Content-Type": "application/json", "X-API-Key": key };
+  const h = { "Content-Type": "application/json" };
   try {
-    const mode = localStorage.getItem(CRM_AUTH_MODE_KEY) || "key";
-    if (mode === "email") {
-      const em = (localStorage.getItem(CRM_ACCOUNT_EMAIL_KEY) || "").trim();
-      if (em) h["X-CRM-Account-Email"] = em;
-    }
+    const tok = localStorage.getItem(CRM_JWT_KEY);
+    if (tok) h.Authorization = `Bearer ${tok}`;
   } catch {
     /* ignore */
   }
@@ -1501,27 +1491,112 @@ function trimApiBaseInput(raw) {
     .replace(/\/+$/, "");
 }
 
-function toggleCrmAuthModeUI() {
-  const sel = q("crmAuthMode");
-  const wrap = q("crmAuthEmailWrap");
-  if (!sel || !wrap) return;
-  wrap.classList.toggle("is-hidden", sel.value !== "email");
-}
-
 function initCloudSyncForm() {
   const elB = q("crmApiBase");
-  const elK = q("crmApiKey");
-  if (!elB || !elK) return;
+  const elE = q("crmLoginEmail");
+  if (!elB) return;
   try {
+    ["crm_api_key", "crm_auth_mode", "crm_account_email"].forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch {
+        /* ignore */
+      }
+    });
     elB.value = localStorage.getItem("crm_api_base") || "";
-    elK.value = localStorage.getItem("crm_api_key") || "";
-    const mode = localStorage.getItem(CRM_AUTH_MODE_KEY) || "key";
-    if (q("crmAuthMode")) q("crmAuthMode").value = mode === "email" ? "email" : "key";
-    if (q("crmAccountEmail")) q("crmAccountEmail").value = localStorage.getItem(CRM_ACCOUNT_EMAIL_KEY) || "";
+    if (elE) elE.value = localStorage.getItem(CRM_LAST_EMAIL_KEY) || "";
   } catch {
     /* ignore */
   }
-  toggleCrmAuthModeUI();
+}
+
+function apiRootForAuth() {
+  const fromInput = trimApiBaseInput(q("crmApiBase")?.value || "");
+  if (fromInput) return fromInput;
+  return apiOrigin();
+}
+
+async function authRegister() {
+  const root = apiRootForAuth();
+  if (!root) {
+    setMsg("请先填写 API 根地址。", "error");
+    return;
+  }
+  const email = (q("crmLoginEmail")?.value || "").trim();
+  const password = q("crmLoginPassword")?.value || "";
+  if (!email.includes("@")) {
+    setMsg("请填写有效邮箱。", "error");
+    return;
+  }
+  if (password.length < 6) {
+    setMsg("注册密码至少 6 位。", "error");
+    return;
+  }
+  try {
+    const res = await fetch(`${root}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text || res.statusText);
+    const data = JSON.parse(text);
+    if (!data.access_token) throw new Error("无 token");
+    localStorage.setItem(CRM_JWT_KEY, data.access_token);
+    localStorage.setItem("crm_api_base", root);
+    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
+    USE_LOCAL_MODE = false;
+    await refresh();
+    setMsg("注册成功，已登录。", "ok");
+  } catch (e) {
+    setMsg(`注册失败：${String(e?.message || e)}`, "error");
+  }
+}
+
+async function authLogin() {
+  const root = apiRootForAuth();
+  if (!root) {
+    setMsg("请先填写 API 根地址。", "error");
+    return;
+  }
+  const email = (q("crmLoginEmail")?.value || "").trim();
+  const password = q("crmLoginPassword")?.value || "";
+  if (!email || !password) {
+    setMsg("请填写邮箱和密码。", "error");
+    return;
+  }
+  try {
+    const res = await fetch(`${root}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text || res.statusText);
+    const data = JSON.parse(text);
+    if (!data.access_token) throw new Error("无 token");
+    localStorage.setItem(CRM_JWT_KEY, data.access_token);
+    localStorage.setItem("crm_api_base", root);
+    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
+    USE_LOCAL_MODE = false;
+    await refresh();
+    setMsg("登录成功。", "ok");
+  } catch (e) {
+    setMsg(`登录失败：${String(e?.message || e)}`, "error");
+  }
+}
+
+function authLogout() {
+  try {
+    localStorage.removeItem(CRM_JWT_KEY);
+  } catch {
+    /* ignore */
+  }
+  USE_LOCAL_MODE = true;
+  refresh();
+  setMsg("已退出登录。", "ok");
 }
 
 async function refresh() {
@@ -1541,7 +1616,7 @@ async function refresh() {
     companies = localListCompanies();
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
     else if (skipHostedSnapshotSeed())
-      setMsg("未连接服务器。多台电脑要同一数据请在侧栏填写 API 根地址与密钥后保存。", "error");
+      setMsg("未连接服务器。请先保存 API 根地址，再用邮箱+密码登录或注册。", "error");
     else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
     renderList();
     startReminderLoop(60000);
@@ -1553,18 +1628,8 @@ q("btnEnableNotif").addEventListener("click", async () => {
   setMsg(ok ? "系统通知已开启（或已授权）。" : "系统通知未授权，将使用弹窗提醒。", ok ? "ok" : "error");
 });
 q("btnRefresh").addEventListener("click", refresh);
-q("btnSaveCloudSync").addEventListener("click", async () => {
-  const mode = q("crmAuthMode")?.value === "email" ? "email" : "key";
-  const emailRaw = (q("crmAccountEmail")?.value || "").trim().toLowerCase();
+q("btnSaveApiBase").addEventListener("click", async () => {
   const base = trimApiBaseInput(q("crmApiBase").value);
-  let key = (q("crmApiKey").value || "").trim();
-  if (!key) {
-    try {
-      key = (localStorage.getItem("crm_api_key") || "").trim();
-    } catch {
-      key = "";
-    }
-  }
   if (!base) {
     try {
       localStorage.removeItem("crm_api_base");
@@ -1572,52 +1637,28 @@ q("btnSaveCloudSync").addEventListener("click", async () => {
       /* ignore */
     }
     if (typeof window !== "undefined") window.CRM_API_BASE = "";
-    USE_LOCAL_MODE = true;
     await refresh();
-    setMsg("已清除 API 根地址。", "ok");
-    return;
-  }
-  if (mode === "email") {
-    if (!emailRaw || !emailRaw.includes("@") || emailRaw.length < 5) {
-      setMsg("邮箱账号模式请填写有效邮箱。", "error");
-      return;
-    }
-  }
-  if (!key) {
-    setMsg("请填写 API 密钥（与服务器 CRM_API_KEY 一致），或留空密钥但需已在本机保存过密钥。", "error");
+    setMsg("已清除服务器地址。", "ok");
     return;
   }
   try {
     localStorage.setItem("crm_api_base", base);
-    localStorage.setItem("crm_api_key", key);
-    localStorage.setItem(CRM_AUTH_MODE_KEY, mode);
-    if (mode === "email") localStorage.setItem(CRM_ACCOUNT_EMAIL_KEY, emailRaw);
-    else localStorage.removeItem(CRM_ACCOUNT_EMAIL_KEY);
     if (typeof window !== "undefined") window.CRM_API_BASE = "";
-    USE_LOCAL_MODE = false;
     await refresh();
-    if (USE_LOCAL_MODE) {
-      setMsg("无法连接服务器，请核对根地址、密钥与跨域（CORS）配置。", "error");
-      return;
-    }
-    setMsg("已保存云端连接，列表与服务器一致。", "ok");
+    setMsg("已保存服务器地址。请使用邮箱密码登录或注册。", "ok");
   } catch (e) {
     setMsg(`保存失败：${String(e?.message || e)}`, "error");
   }
 });
-{
-  const m = q("crmAuthMode");
-  if (m) m.addEventListener("change", toggleCrmAuthModeUI);
-}
-{
-  const b = q("btnFillDevApiKey");
-  if (b)
-    b.addEventListener("click", () => {
-      const el = q("crmApiKey");
-      if (el) el.value = "dev-key-change-me";
-      setMsg("已填入本地开发默认密钥，记得点「保存并拉取云端列表」。", "ok");
-    });
-}
+q("btnAuthLogin").addEventListener("click", () => {
+  void authLogin();
+});
+q("btnAuthRegister").addEventListener("click", () => {
+  void authRegister();
+});
+q("btnAuthLogout").addEventListener("click", () => {
+  authLogout();
+});
 q("btnExportData").addEventListener("click", exportCurrentData);
 q("btnImportData").addEventListener("click", () => q("importDataFile").click());
 q("importDataFile").addEventListener("change", async (ev) => {

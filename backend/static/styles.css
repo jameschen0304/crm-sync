@@ -50,12 +50,10 @@ h2{margin:0 0 10px;font-size:15px;color:#1c4f36}
 .sidebar-cloud .label-compact .input{margin-top:4px}
 .sidebar-cloud #btnSaveCloudSync{margin-top:10px;width:100%}
 .sidebar-cloud-note{margin:8px 0 0;font-size:11px;color:var(--muted);line-height:1.45}
-.sidebar-key-hint{margin:6px 0 0;font-size:11px;color:var(--muted);line-height:1.5}
-.sidebar-key-hint code{font-size:10px;background:rgba(31,157,85,.08);padding:1px 5px;border-radius:4px;color:#14532d}
-.sidebar-key-hint strong{font-weight:700;color:#1c4f36}
 .btn-compact{margin-top:6px;padding:6px 10px;font-size:12px;width:100%}
-.sidebar-cloud .is-hidden{display:none!important}
 .sidebar-cloud{margin-top:auto;padding-top:12px;border-top:1px dashed var(--line)}
+.auth-btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.sidebar-cloud-note code{font-size:10px;background:rgba(31,157,85,.08);padding:1px 5px;border-radius:4px;color:#14532d}
 
 .stats-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
 .stat-card{border:1px solid var(--line);background:var(--panel-soft);border-radius:10px;padding:10px}
