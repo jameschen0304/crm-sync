@@ -7,7 +7,21 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="stylesheet" href="./styles.css?v=20260424f" />
+    <script>
+      (function () {
+        try {
+          var t = Date.parse(document.lastModified);
+          window.__CRM_ASSET_V = !Number.isNaN(t) ? String(t) : String(Date.now());
+        } catch (e) {
+          window.__CRM_ASSET_V = String(Date.now());
+        }
+        document.write(
+          '<link rel="stylesheet" href="./styles.css?v=' +
+            encodeURIComponent(window.__CRM_ASSET_V) +
+            '">'
+        );
+      })();
+    </script>
   </head>
   <body>
     <main class="wrap">
@@ -16,7 +30,7 @@
           <h1>每日 To-Do</h1>
           <p class="sub">默认列表为今日待办；可看全部与未来任务。</p>
         </div>
-        <a class="btn btn-secondary" href="./index.html?v=20260424f">返回 CRM</a>
+        <a id="crmNavBack" class="btn btn-secondary" href="./index.html">返回 CRM</a>
       </header>
 
       <section class="panel todo-panel">
@@ -69,6 +83,16 @@
       </section>
     </main>
 
-    <script src="./todo.js?v=20260424f"></script>
+    <script>
+      (function () {
+        var a = document.getElementById("crmNavBack");
+        if (a) a.href = "./index.html?v=" + encodeURIComponent(window.__CRM_ASSET_V || "0");
+        document.write(
+          '<script src="./todo.js?v=' +
+            encodeURIComponent(window.__CRM_ASSET_V || "0") +
+            '"><\\/script>'
+        );
+      })();
+    </script>
   </body>
  </html>

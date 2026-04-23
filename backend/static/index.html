@@ -7,8 +7,21 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>CRM（公司）- 上班时间提醒</title>
-    <script>window.__CRM_ASSET_V = "20260424f";</script>
-    <link rel="stylesheet" href="./styles.css?v=20260424f" />
+    <script>
+      (function () {
+        try {
+          var t = Date.parse(document.lastModified);
+          window.__CRM_ASSET_V = !Number.isNaN(t) ? String(t) : String(Date.now());
+        } catch (e) {
+          window.__CRM_ASSET_V = String(Date.now());
+        }
+        document.write(
+          '<link rel="stylesheet" href="./styles.css?v=' +
+            encodeURIComponent(window.__CRM_ASSET_V) +
+            '">'
+        );
+      })();
+    </script>
   </head>
   <body>
     <main class="wrap">
@@ -23,10 +36,6 @@
       <section class="app-shell">
         <aside class="panel sidebar">
           <h2>筛选与操作</h2>
-          <p class="version-tip">
-            刚在电脑上更新但网页没变？① 确认已从 Windows 把改动 <strong>push 到 GitHub</strong> 并等 Pages 构建完成；② 本页按
-            <strong>Ctrl+F5</strong> 强制刷新；③ 客户数据若在「离线模式」存在本机浏览器，换电脑不会自动同步，请连后端或导出/导入 JSON。
-          </p>
           <div class="sidebar-block">
             <label>
               地区
@@ -68,7 +77,7 @@
             <button id="btnSaveDailySettings" class="btn btn-secondary">保存目标设置</button>
           </div>
           <div class="sidebar-block">
-            <a class="btn btn-secondary" href="./todo.html?v=20260424f">打开每日 To-Do 模块</a>
+            <a id="crmNavTodo" class="btn btn-secondary" href="./todo.html">打开每日 To-Do 模块</a>
             <div class="view-toggle">
               <button id="btnViewDetailed" class="btn">详细视图</button>
               <button id="btnViewCompact" class="btn btn-secondary">紧凑视图</button>
@@ -311,6 +320,16 @@
       // 未填写时：页面仍可打开，但会走离线模式（浏览器本地数据），与线上海量库不一致
       window.CRM_API_BASE = "";
     </script>
-    <script src="./app.js?v=20260424f"></script>
+    <script>
+      (function () {
+        var a = document.getElementById("crmNavTodo");
+        if (a) a.href = "./todo.html?v=" + encodeURIComponent(window.__CRM_ASSET_V || "0");
+        document.write(
+          '<script src="./app.js?v=' +
+            encodeURIComponent(window.__CRM_ASSET_V || "0") +
+            '"><\\/script>'
+        );
+      })();
+    </script>
   </body>
 </html>

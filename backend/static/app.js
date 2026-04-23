@@ -1360,7 +1360,16 @@ async function tryAutoSeedFromHostedJSON() {
   }
   try {
     const v =
-      typeof window !== "undefined" && window.__CRM_ASSET_V ? String(window.__CRM_ASSET_V) : "20260424f";
+      typeof window !== "undefined" && window.__CRM_ASSET_V
+        ? String(window.__CRM_ASSET_V)
+        : (() => {
+            try {
+              const t = Date.parse(document.lastModified);
+              return !Number.isNaN(t) ? String(t) : String(Date.now());
+            } catch {
+              return String(Date.now());
+            }
+          })();
     const res = await fetch(`./crm-recovered-data.json?v=${encodeURIComponent(v)}`);
     if (!res.ok) return false;
     const data = await res.json();

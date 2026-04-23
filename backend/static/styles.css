@@ -28,8 +28,6 @@ h1{margin:0;font-size:28px}
 .data-sync-hint{margin:8px 0 0;padding:8px 10px;border-radius:10px;font-size:12px;line-height:1.45;max-width:720px}
 .data-sync-hint.ok{background:rgba(31,157,85,.12);border:1px solid rgba(31,157,85,.35);color:#14532d}
 .data-sync-hint.warn{background:rgba(180,83,9,.1);border:1px solid rgba(180,83,9,.35);color:#7c2d12}
-.version-tip{margin:0 0 12px;padding:8px 10px;border-radius:10px;font-size:12px;line-height:1.5;color:#5a4a32;background:rgba(251,191,36,.12);border:1px solid rgba(217,119,6,.28)}
-.version-tip strong{color:#92400e}
 
 .app-shell{display:grid;grid-template-columns:290px 1fr;gap:12px}
 .sidebar{position:sticky;top:12px;align-self:start}
