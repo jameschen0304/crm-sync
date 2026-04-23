@@ -12,7 +12,13 @@ from sqlalchemy import DateTime, Integer, String, create_engine, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 
-DB_PATH = Path(__file__).with_name("crm.db")
+# 可选：Render 挂持久盘时设 CRM_DB_PATH=/data/crm.db，避免每次部署丢失 SQLite
+_db_override = os.getenv("CRM_DB_PATH", "").strip()
+if _db_override:
+    DB_PATH = Path(_db_override)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+else:
+    DB_PATH = Path(__file__).with_name("crm.db")
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 API_KEY = os.getenv("CRM_API_KEY", "dev-key-change-me")

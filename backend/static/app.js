@@ -21,6 +21,11 @@ function resolveApiUrl(path) {
   return `${base}${path}`;
 }
 
+/** 仅在没有配置远程 API 时走浏览器本地存根；配置了 crm_api_base 后必须始终请求网络，否则会永远看不到服务器最新数据 */
+function useLocalApiStub() {
+  return USE_LOCAL_MODE && !apiOrigin();
+}
+
 const WORK_START = "09:00";
 const WORK_END = "18:00";
 const WORK_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri"]);
@@ -56,6 +61,8 @@ const DAILY_SETTINGS_KEY = "crm_daily_settings";
 const LOCAL_DATA_KEY = "crm_companies_local_v1";
 const AUTO_SEED_FLAG_KEY = "crm_seed_imported_v1";
 let USE_LOCAL_MODE = window.location.protocol === "file:";
+/** 上一次「刷新」是否成功从远程 API 拉到列表（有配置 apiOrigin 且未走本地存根） */
+let lastRemoteFetchOk = false;
 
 // 选择国家后自动填默认时区（IANA）
 // 说明：部分国家跨多个时区，这里填“最常用/首都时区”；你仍可手动改。
@@ -1228,7 +1235,7 @@ function whatsappToLink(raw) {
 }
 
 async function apiGet(path) {
-  if (USE_LOCAL_MODE) {
+  if (useLocalApiStub()) {
     if (path === "/api/companies") return localListCompanies();
     throw new Error(`本地模式不支持 GET ${path}`);
   }
@@ -1237,7 +1244,7 @@ async function apiGet(path) {
   return res.json();
 }
 async function apiPost(path, body) {
-  if (USE_LOCAL_MODE) {
+  if (useLocalApiStub()) {
     if (path === "/api/companies") return localCreateCompany(body);
     throw new Error(`本地模式不支持 POST ${path}`);
   }
@@ -1246,7 +1253,7 @@ async function apiPost(path, body) {
   return res.json();
 }
 async function apiPut(path, body) {
-  if (USE_LOCAL_MODE) {
+  if (useLocalApiStub()) {
     const m = String(path).match(/^\/api\/companies\/(\d+)$/);
     if (!m) throw new Error(`本地模式不支持 PUT ${path}`);
     return localUpdateCompany(Number(m[1]), body);
@@ -1256,7 +1263,7 @@ async function apiPut(path, body) {
   return res.json();
 }
 async function apiDelete(path) {
-  if (USE_LOCAL_MODE) {
+  if (useLocalApiStub()) {
     const m = String(path).match(/^\/api\/companies\/(\d+)$/);
     if (!m) throw new Error(`本地模式不支持 DELETE ${path}`);
     return localDeleteCompany(Number(m[1]));
@@ -1417,15 +1424,41 @@ async function importLocalDataFromFile(file) {
   localSaveCompanies(normalized);
   migrateLocalFollowUpDefaults();
   companies = localListCompanies();
+  lastRemoteFetchOk = false;
   renderList();
+  updateDataSyncHint();
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
 }
 
+function updateDataSyncHint() {
+  const el = q("dataSyncHint");
+  if (!el) return;
+  if (lastRemoteFetchOk) {
+    el.textContent = "数据已与服务器同步（当前为最新列表）。";
+    el.className = "data-sync-hint ok";
+    return;
+  }
+  if (apiOrigin()) {
+    el.textContent =
+      "无法从服务器拉取最新数据，当前为浏览器内缓存或旧快照。请检查网络、API 地址与密钥后点「刷新」。";
+    el.className = "data-sync-hint warn";
+    return;
+  }
+  el.textContent =
+    "未配置后端 API：数据只存在本机浏览器或仓库里的快照，不会自动与云端一致。部署后端后设置 window.CRM_API_BASE 或 localStorage.crm_api_base。";
+  el.className = "data-sync-hint warn";
+}
+
 async function refresh() {
+  lastRemoteFetchOk = false;
+  const hadRemote = Boolean(apiOrigin());
+  if (hadRemote) USE_LOCAL_MODE = false;
   try {
     companies = await apiGet("/api/companies");
-    if (USE_LOCAL_MODE) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
+    lastRemoteFetchOk = Boolean(apiOrigin()) && !useLocalApiStub();
+    if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
     else setMsg("");
+    updateDataSyncHint();
     renderList();
     startReminderLoop(60000);
   } catch (e) {
@@ -1436,6 +1469,7 @@ async function refresh() {
     companies = localListCompanies();
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
     else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
+    updateDataSyncHint();
     renderList();
     startReminderLoop(60000);
   }
@@ -1454,6 +1488,7 @@ q("importDataFile").addEventListener("change", async (ev) => {
   if (!file) return;
   try {
     USE_LOCAL_MODE = true;
+    lastRemoteFetchOk = false;
     await importLocalDataFromFile(file);
   } catch (e) {
     setMsg(`导入失败：${String(e?.message || e)}`, "error");

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM（公司）- 上班时间提醒</title>
-    <link rel="stylesheet" href="./styles.css?v=20260401e" />
+    <link rel="stylesheet" href="./styles.css?v=20260424d" />
   </head>
   <body>
     <main class="wrap">
@@ -12,6 +12,7 @@
         <div>
           <h1>CRM 工作台</h1>
           <p class="sub">客户分区 + 跟进排期 + 到期提醒</p>
+          <p id="dataSyncHint" class="data-sync-hint warn" role="status" aria-live="polite"></p>
         </div>
       </header>
 
@@ -302,6 +303,6 @@
       // 未填写时：页面仍可打开，但会走离线模式（浏览器本地数据），与线上海量库不一致
       window.CRM_API_BASE = "";
     </script>
-    <script src="./app.js?v=20260424c"></script>
+    <script src="./app.js?v=20260424d"></script>
   </body>
 </html>
