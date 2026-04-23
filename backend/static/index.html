@@ -298,9 +298,10 @@
     </main>
 
     <script>
-      // GitHub Pages 静态页请求此地址的 API（与 render.yaml 中服务名 crm-sync-api 一致；若 Render 改名请同步改这里）
-      window.CRM_API_BASE = "https://crm-sync-api.onrender.com";
+      // 在 Render（或其它）部署 FastAPI 后，把下面改成控制台里的服务根地址，不要末尾 /
+      // 未填写时：页面仍可打开，但会走离线模式（浏览器本地数据），与线上海量库不一致
+      window.CRM_API_BASE = "";
     </script>
-    <script src="./app.js?v=20260424b"></script>
+    <script src="./app.js?v=20260424c"></script>
   </body>
 </html>
