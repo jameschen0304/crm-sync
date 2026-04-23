@@ -1485,16 +1485,8 @@ async function importLocalDataFromFile(file) {
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
 }
 
-function trimApiBaseInput(raw) {
-  return String(raw || "")
-    .trim()
-    .replace(/\/+$/, "");
-}
-
 function initCloudSyncForm() {
-  const elB = q("crmApiBase");
   const elE = q("crmLoginEmail");
-  if (!elB) return;
   try {
     ["crm_api_key", "crm_auth_mode", "crm_account_email"].forEach((k) => {
       try {
@@ -1503,23 +1495,16 @@ function initCloudSyncForm() {
         /* ignore */
       }
     });
-    elB.value = localStorage.getItem("crm_api_base") || "";
     if (elE) elE.value = localStorage.getItem(CRM_LAST_EMAIL_KEY) || "";
   } catch {
     /* ignore */
   }
 }
 
-function apiRootForAuth() {
-  const fromInput = trimApiBaseInput(q("crmApiBase")?.value || "");
-  if (fromInput) return fromInput;
-  return apiOrigin();
-}
-
 async function authRegister() {
-  const root = apiRootForAuth();
+  const root = apiOrigin();
   if (!root) {
-    setMsg("请先填写 API 根地址。", "error");
+    setMsg("未配置后端地址：在页面底部设置 window.CRM_API_BASE，或执行 localStorage.setItem(\"crm_api_base\",\"https://…\")。", "error");
     return;
   }
   const email = (q("crmLoginEmail")?.value || "").trim();
@@ -1555,9 +1540,9 @@ async function authRegister() {
 }
 
 async function authLogin() {
-  const root = apiRootForAuth();
+  const root = apiOrigin();
   if (!root) {
-    setMsg("请先填写 API 根地址。", "error");
+    setMsg("未配置后端地址：在页面底部设置 window.CRM_API_BASE，或执行 localStorage.setItem(\"crm_api_base\",\"https://…\")。", "error");
     return;
   }
   const email = (q("crmLoginEmail")?.value || "").trim();
@@ -1616,7 +1601,7 @@ async function refresh() {
     companies = localListCompanies();
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
     else if (skipHostedSnapshotSeed())
-      setMsg("未连接服务器。请先保存 API 根地址，再用邮箱+密码登录或注册。", "error");
+      setMsg("未连接服务器。请配置后端地址并登录（见侧栏下方说明）。", "error");
     else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
     renderList();
     startReminderLoop(60000);
@@ -1628,28 +1613,6 @@ q("btnEnableNotif").addEventListener("click", async () => {
   setMsg(ok ? "系统通知已开启（或已授权）。" : "系统通知未授权，将使用弹窗提醒。", ok ? "ok" : "error");
 });
 q("btnRefresh").addEventListener("click", refresh);
-q("btnSaveApiBase").addEventListener("click", async () => {
-  const base = trimApiBaseInput(q("crmApiBase").value);
-  if (!base) {
-    try {
-      localStorage.removeItem("crm_api_base");
-    } catch {
-      /* ignore */
-    }
-    if (typeof window !== "undefined") window.CRM_API_BASE = "";
-    await refresh();
-    setMsg("已清除服务器地址。", "ok");
-    return;
-  }
-  try {
-    localStorage.setItem("crm_api_base", base);
-    if (typeof window !== "undefined") window.CRM_API_BASE = "";
-    await refresh();
-    setMsg("已保存服务器地址。请使用邮箱密码登录或注册。", "ok");
-  } catch (e) {
-    setMsg(`保存失败：${String(e?.message || e)}`, "error");
-  }
-});
 q("btnAuthLogin").addEventListener("click", () => {
   void authLogin();
 });

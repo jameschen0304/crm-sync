@@ -89,19 +89,7 @@
             <input id="importDataFile" type="file" accept="application/json" style="display:none;" />
           </div>
           <div class="sidebar-block sidebar-cloud">
-            <h3 class="sidebar-subh">云端账号</h3>
-            <label class="label-compact"
-              >API 根地址
-              <input
-                id="crmApiBase"
-                class="input"
-                type="url"
-                inputmode="url"
-                placeholder="https://你的服务.onrender.com"
-                autocomplete="off"
-              />
-            </label>
-            <button type="button" id="btnSaveApiBase" class="btn btn-secondary btn-compact">保存服务器地址</button>
+            <h3 class="sidebar-subh">登录</h3>
             <label class="label-compact"
               >邮箱
               <input
@@ -129,8 +117,8 @@
             </div>
             <button type="button" id="btnAuthLogout" class="btn btn-secondary btn-compact">退出登录</button>
             <p class="sidebar-cloud-note">
-              使用邮箱+密码登录后，各台电脑共用服务器上的同一套客户数据。Render 上请设置环境变量
-              <code>CRM_JWT_SECRET</code>（勿泄露）。注册可在环境变量 <code>CRM_ALLOW_REGISTER=false</code> 后关闭。
+              后端地址在页面底部 <code>window.CRM_API_BASE</code> 或浏览器 <code>localStorage.crm_api_base</code> 配置。服务器需设置
+              <code>CRM_JWT_SECRET</code>。
             </p>
           </div>
         </aside>
@@ -360,8 +348,7 @@
     </main>
 
     <script>
-      // 在 Render（或其它）部署 FastAPI 后，把下面改成控制台里的服务根地址，不要末尾 /
-      // 未填写时：页面仍可打开，但会走离线模式（浏览器本地数据），与线上海量库不一致
+      // 静态页部署：在此填写 FastAPI 根地址（不要末尾 /）；也可在控制台执行 localStorage.setItem('crm_api_base','https://…')
       window.CRM_API_BASE = "";
     </script>
     <script>
