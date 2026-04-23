@@ -1,6 +1,26 @@
 const API_KEY = localStorage.getItem("crm_api_key") || "dev-key-change-me";
 const HEADERS = { "Content-Type": "application/json", "X-API-Key": API_KEY };
 
+/** 纯静态部署（如 GitHub Pages）时指向 FastAPI 根地址，不要末尾斜杠。优先 window.CRM_API_BASE，其次 localStorage crm_api_base */
+function apiOrigin() {
+  if (typeof window !== "undefined" && window.CRM_API_BASE) {
+    return String(window.CRM_API_BASE).replace(/\/$/, "");
+  }
+  try {
+    const fromLs = localStorage.getItem("crm_api_base");
+    if (fromLs) return String(fromLs).replace(/\/$/, "");
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+function resolveApiUrl(path) {
+  const base = apiOrigin();
+  if (!base || !String(path).startsWith("/")) return path;
+  return `${base}${path}`;
+}
+
 const WORK_START = "09:00";
 const WORK_END = "18:00";
 const WORK_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri"]);
@@ -1212,7 +1232,7 @@ async function apiGet(path) {
     if (path === "/api/companies") return localListCompanies();
     throw new Error(`本地模式不支持 GET ${path}`);
   }
-  const res = await fetch(path, { headers: HEADERS });
+  const res = await fetch(resolveApiUrl(path), { headers: HEADERS });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1221,7 +1241,7 @@ async function apiPost(path, body) {
     if (path === "/api/companies") return localCreateCompany(body);
     throw new Error(`本地模式不支持 POST ${path}`);
   }
-  const res = await fetch(path, { method: "POST", headers: HEADERS, body: JSON.stringify(body) });
+  const res = await fetch(resolveApiUrl(path), { method: "POST", headers: HEADERS, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1231,7 +1251,7 @@ async function apiPut(path, body) {
     if (!m) throw new Error(`本地模式不支持 PUT ${path}`);
     return localUpdateCompany(Number(m[1]), body);
   }
-  const res = await fetch(path, { method: "PUT", headers: HEADERS, body: JSON.stringify(body) });
+  const res = await fetch(resolveApiUrl(path), { method: "PUT", headers: HEADERS, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -1241,7 +1261,7 @@ async function apiDelete(path) {
     if (!m) throw new Error(`本地模式不支持 DELETE ${path}`);
     return localDeleteCompany(Number(m[1]));
   }
-  const res = await fetch(path, { method: "DELETE", headers: HEADERS });
+  const res = await fetch(resolveApiUrl(path), { method: "DELETE", headers: HEADERS });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

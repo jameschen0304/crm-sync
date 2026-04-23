@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -286,6 +287,26 @@ class CompanyOut(CompanyIn):
 
 
 app = FastAPI(title="CRM Sync (Worktime Reminder)")
+
+# GitHub Pages 等静态站点跨域调用本 API（浏览器会先发 OPTIONS 预检）
+_cors = os.getenv("CRM_CORS_ORIGINS", "").strip()
+if _cors:
+    _allow = [o.strip() for o in _cors.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_allow,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https://[\w.-]+\.github\.io|http://127\.0\.0\.1(:\d+)?|http://localhost(:\d+)?",
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 static_dir = Path(__file__).with_name("static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
