@@ -131,6 +131,14 @@
                 autocomplete="off"
               />
             </label>
+            <p class="sidebar-key-hint">
+              本地跑后端且没改环境变量时，密钥是 <code>dev-key-change-me</code>。部署在
+              <strong>Render</strong> 时：打开该 Web Service → <strong>Environment</strong> → 找或新建变量
+              <code>CRM_API_KEY</code>，其值即此处要填的密钥。
+            </p>
+            <button type="button" id="btnFillDevApiKey" class="btn btn-secondary btn-compact">
+              一键填入本地默认密钥
+            </button>
             <button type="button" id="btnSaveCloudSync" class="btn">保存并拉取云端列表</button>
             <p class="sidebar-cloud-note">邮箱模式用邮箱标识账号；鉴权仍靠下方密钥。各台填同一套即可共用数据。</p>
           </div>

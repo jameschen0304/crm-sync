@@ -1609,6 +1609,15 @@ q("btnSaveCloudSync").addEventListener("click", async () => {
   const m = q("crmAuthMode");
   if (m) m.addEventListener("change", toggleCrmAuthModeUI);
 }
+{
+  const b = q("btnFillDevApiKey");
+  if (b)
+    b.addEventListener("click", () => {
+      const el = q("crmApiKey");
+      if (el) el.value = "dev-key-change-me";
+      setMsg("已填入本地开发默认密钥，记得点「保存并拉取云端列表」。", "ok");
+    });
+}
 q("btnExportData").addEventListener("click", exportCurrentData);
 q("btnImportData").addEventListener("click", () => q("importDataFile").click());
 q("importDataFile").addEventListener("change", async (ev) => {
