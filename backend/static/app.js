@@ -1652,6 +1652,11 @@ async function refresh() {
     const seeded = await tryAutoSeedFromHostedJSON();
     migrateLocalFollowUpDefaults();
     companies = localListCompanies();
+    if (!companies.length) {
+      // 无论登录状态如何，空库时都强制回灌内置备份
+      await restoreFromBuiltinBackup(true);
+      return;
+    }
     if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
     else if (skipHostedSnapshotSeed())
       setMsg("未连接服务器，请先登录。", "error");
