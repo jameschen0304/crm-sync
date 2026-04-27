@@ -552,6 +552,11 @@ function setMsg(text, type = "") {
   el.className = `msg ${type}`.trim();
 }
 
+function bindClick(id, handler) {
+  const el = q(id);
+  if (el) el.addEventListener("click", handler);
+}
+
 function toDatetimeLocalValue(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -1647,23 +1652,23 @@ async function refresh() {
   }
 }
 
-q("btnEnableNotif").addEventListener("click", async () => {
+bindClick("btnEnableNotif", async () => {
   const ok = await enableNotifications();
   setMsg(ok ? "系统通知已开启（或已授权）。" : "系统通知未授权，将使用弹窗提醒。", ok ? "ok" : "error");
 });
-q("btnRefresh").addEventListener("click", refresh);
-q("btnAuthLogin").addEventListener("click", () => {
+bindClick("btnRefresh", refresh);
+bindClick("btnAuthLogin", () => {
   void authLogin();
 });
-q("btnAuthRegister").addEventListener("click", () => {
+bindClick("btnAuthRegister", () => {
   void authRegister();
 });
-q("btnAuthLogout").addEventListener("click", () => {
+bindClick("btnAuthLogout", () => {
   authLogout();
 });
-q("btnExportData").addEventListener("click", exportCurrentData);
-q("btnImportData").addEventListener("click", () => q("importDataFile").click());
-q("btnRestoreBuiltin").addEventListener("click", restoreFromBuiltinBackup);
+bindClick("btnExportData", exportCurrentData);
+bindClick("btnImportData", () => q("importDataFile").click());
+bindClick("btnRestoreBuiltin", restoreFromBuiltinBackup);
 q("importDataFile").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
   ev.target.value = "";
