@@ -61,6 +61,7 @@ class Company(Base):
     linkedin_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     website_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    wechat: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     whatsapp: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     # 跟进流程
     follow_up_stage: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
@@ -119,6 +120,7 @@ def ensure_schema():
         add("last_follow_up_channel", "last_follow_up_channel VARCHAR(32)")
         add("last_follow_up_note", "last_follow_up_note VARCHAR(2000)")
         add("follow_up_history", "follow_up_history VARCHAR(8000)")
+        add("wechat", "wechat VARCHAR(128)")
 
         for stmt in alters:
             conn.execute(text(stmt))
@@ -312,6 +314,7 @@ class CompanyIn(BaseModel):
     linkedin_url: Optional[str] = Field(default=None, max_length=512)
     website_url: Optional[str] = Field(default=None, max_length=512)
     email: Optional[str] = Field(default=None, max_length=255)
+    wechat: Optional[str] = Field(default=None, max_length=128)
     whatsapp: Optional[str] = Field(default=None, max_length=64)
     follow_up_stage: Optional[str] = Field(default=None, max_length=32)
     next_follow_up_at: Optional[datetime] = None

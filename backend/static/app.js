@@ -624,7 +624,7 @@ function getFilteredCompaniesNow() {
     if (regionFilter && effectiveRegion !== regionFilter) return false;
     if (followStatusFilter && followStatusOf(c) !== followStatusFilter) return false;
     if (!keyword) return true;
-    const hay = `${c.name || ""} ${c.email || ""} ${c.whatsapp || ""}`.toLowerCase();
+    const hay = `${c.name || ""} ${c.email || ""} ${c.whatsapp || ""} ${c.wechat || ""}`.toLowerCase();
     return hay.includes(keyword);
   });
 }
@@ -876,7 +876,7 @@ function renderList() {
     if (regionFilter && effectiveRegion !== regionFilter) return false;
     if (followStatusFilter && followStatusOf(c) !== followStatusFilter) return false;
     if (!keyword) return true;
-    const hay = `${c.name || ""} ${c.email || ""} ${c.whatsapp || ""}`.toLowerCase();
+    const hay = `${c.name || ""} ${c.email || ""} ${c.whatsapp || ""} ${c.wechat || ""}`.toLowerCase();
     return hay.includes(keyword);
   });
 
@@ -944,6 +944,7 @@ function renderList() {
       const links = [
         c.website_url ? `<a class="link" href="${c.website_url}" target="_blank" rel="noreferrer">官网</a>` : "",
         c.linkedin_url ? `<a class="link" href="${c.linkedin_url}" target="_blank" rel="noreferrer">LinkedIn</a>` : "",
+        c.wechat ? `<span class="link">微信：${escapeHtml(c.wechat)}</span>` : "",
         waLink ? `<a class="link" href="${waLink}" target="_blank" rel="noreferrer">WhatsApp</a>` : "",
       ]
         .filter(Boolean)
@@ -1079,6 +1080,7 @@ function renderList() {
       q("linkedin_url").value = c.linkedin_url || "";
       q("website_url").value = c.website_url || "";
       q("email").value = c.email || "";
+      q("wechat").value = c.wechat || "";
       q("whatsapp").value = c.whatsapp || "";
       q("follow_up_stage").value = c.follow_up_stage || "新线索";
       q("next_follow_up_at").value = toDatetimeLocalValue(c.next_follow_up_at);
@@ -1223,6 +1225,7 @@ function renderDetail(c) {
   const linkList = [
     c.linkedin_url ? `<a class="link" href="${c.linkedin_url}" target="_blank" rel="noreferrer">LinkedIn</a>` : "",
     c.website_url ? `<a class="link" href="${c.website_url}" target="_blank" rel="noreferrer">官网</a>` : "",
+    c.wechat ? `<span class="link">微信：${escapeHtml(c.wechat)}</span>` : "",
     c.whatsapp ? `<a class="link" href="${whatsappToLink(c.whatsapp)}" target="_blank" rel="noreferrer">WhatsApp</a>` : "",
   ].filter(Boolean).join(" · ");
   detail.innerHTML = `
@@ -1639,6 +1642,7 @@ q("companyForm").addEventListener("submit", async (ev) => {
     linkedin_url: q("linkedin_url").value.trim() || null,
     website_url: q("website_url").value.trim() || null,
     email: q("email").value.trim() || null,
+    wechat: q("wechat").value.trim() || null,
     whatsapp: q("whatsapp").value.trim() || null,
     follow_up_stage: (q("follow_up_stage").value || "").trim() || null,
     next_follow_up_at: fromDatetimeLocalValue(q("next_follow_up_at").value),
