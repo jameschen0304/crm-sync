@@ -1600,6 +1600,29 @@ function authLogout() {
   setMsg("已退出登录。", "ok");
 }
 
+async function restoreFromBuiltinBackup() {
+  const ok = confirm("确认恢复内置备份数据？这会覆盖当前离线客户数据。");
+  if (!ok) return;
+  try {
+    const res = await fetch("./crm-recovered-data.json?v=20260331b");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const rows = Array.isArray(data) ? data : data?.rows;
+    const normalized = normalizeImportedRows(rows);
+    if (!normalized.length) throw new Error("内置备份为空");
+    USE_LOCAL_MODE = true;
+    localSaveCompanies(normalized);
+    localStorage.setItem(AUTO_SEED_FLAG_KEY, "1");
+    migrateLocalFollowUpDefaults();
+    companies = localListCompanies();
+    renderList();
+    startReminderLoop(60000);
+    setMsg(`已恢复内置备份，共 ${normalized.length} 条客户。`, "ok");
+  } catch (e) {
+    setMsg(`恢复失败：${String(e?.message || e)}`, "error");
+  }
+}
+
 async function refresh() {
   const hadRemote = Boolean(apiOrigin());
   if (hadRemote) USE_LOCAL_MODE = false;
@@ -1640,6 +1663,7 @@ q("btnAuthLogout").addEventListener("click", () => {
 });
 q("btnExportData").addEventListener("click", exportCurrentData);
 q("btnImportData").addEventListener("click", () => q("importDataFile").click());
+q("btnRestoreBuiltin").addEventListener("click", restoreFromBuiltinBackup);
 q("importDataFile").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
   ev.target.value = "";
