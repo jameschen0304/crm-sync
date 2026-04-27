@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
+from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, Field
 from sqlalchemy import DateTime, Integer, String, create_engine, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -28,7 +29,9 @@ JWT_SECRET = os.getenv("CRM_JWT_SECRET", "dev-jwt-secret-change-me")
 JWT_ALG = "HS256"
 JWT_EXPIRE_DAYS = int(os.getenv("CRM_JWT_EXPIRE_DAYS", "30"))
 ALLOW_REGISTER = os.getenv("CRM_ALLOW_REGISTER", "true").lower() in ("1", "true", "yes")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 first to avoid bcrypt backend issues on some hosts.
+# Keep bcrypt in the list so existing bcrypt hashes can still be verified.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
 HOLIDAYS_MMDD = {
     "01-01",  # 元旦
@@ -408,11 +411,18 @@ def auth_register(payload: RegisterBody, db: Session = Depends(get_db)) -> Token
         raise HTTPException(status_code=403, detail="Registration is disabled")
     if db.scalar(select(CrmUser).where(CrmUser.email == email)):
         raise HTTPException(status_code=409, detail="Email already registered")
-    row = CrmUser(email=email, password_hash=pwd_context.hash(payload.password))
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return TokenOut(access_token=issue_access_token(row.id))
+    try:
+        row = CrmUser(email=email, password_hash=pwd_context.hash(payload.password))
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return TokenOut(access_token=issue_access_token(row.id))
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Register storage error")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Register failed")
 
 
 @app.post("/api/auth/login", response_model=TokenOut)
