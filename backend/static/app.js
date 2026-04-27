@@ -71,6 +71,7 @@ const REGION_ORDER = ["东南亚", "南亚", "欧美澳", "中东", "中亚", "�
 const DAILY_SETTINGS_KEY = "crm_daily_settings";
 const LOCAL_DATA_KEY = "crm_companies_local_v1";
 const AUTO_SEED_FLAG_KEY = "crm_seed_imported_v1";
+const REMOTE_BACKUP_URL = "https://raw.githubusercontent.com/jameschen0304/crm-sync/main/backend/static/crm-recovered-data.json";
 let USE_LOCAL_MODE = window.location.protocol === "file:";
 
 // 选择国家后自动填默认时区（IANA）
@@ -1623,9 +1624,16 @@ async function restoreFromBuiltinBackup(force = false) {
     if (!ok) return;
   }
   try {
-    const res = await fetch("./crm-recovered-data.json?v=20260331b");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    // 优先从 GitHub 原始备份恢复，失败再回退本地静态文件
+    let data = null;
+    let res = await fetch(`${REMOTE_BACKUP_URL}?t=${Date.now()}`);
+    if (res.ok) {
+      data = await res.json();
+    } else {
+      res = await fetch("./crm-recovered-data.json?v=20260331b");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    }
     const rows = Array.isArray(data) ? data : data?.rows;
     const normalized = normalizeImportedRows(rows);
     if (!normalized.length) throw new Error("内置备份为空");
