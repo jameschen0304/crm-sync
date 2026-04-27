@@ -1605,9 +1605,11 @@ function authLogout() {
   setMsg("已退出登录。", "ok");
 }
 
-async function restoreFromBuiltinBackup() {
-  const ok = confirm("确认恢复内置备份数据？这会覆盖当前离线客户数据。");
-  if (!ok) return;
+async function restoreFromBuiltinBackup(force = false) {
+  if (!force) {
+    const ok = confirm("确认恢复内置备份数据？这会覆盖当前离线客户数据。");
+    if (!ok) return;
+  }
   try {
     const res = await fetch("./crm-recovered-data.json?v=20260331b");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1623,8 +1625,10 @@ async function restoreFromBuiltinBackup() {
     renderList();
     startReminderLoop(60000);
     setMsg(`已恢复内置备份，共 ${normalized.length} 条客户。`, "ok");
+    return true;
   } catch (e) {
     setMsg(`恢复失败：${String(e?.message || e)}`, "error");
+    return false;
   }
 }
 
@@ -1633,6 +1637,11 @@ async function refresh() {
   if (hadRemote) USE_LOCAL_MODE = false;
   try {
     companies = await apiGet("/api/companies");
+    if (!companies.length) {
+      // 数据意外为空时自动回灌内置备份，避免用户看到“空库”
+      await restoreFromBuiltinBackup(true);
+      return;
+    }
     if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
     else setMsg("");
     renderList();
