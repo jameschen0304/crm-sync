@@ -1882,4 +1882,9 @@ q("btnDetailEdit").addEventListener("click", () => {
   if (editBtn) editBtn.click();
 });
 initCloudSyncForm();
-refresh();
+const FORCE_BOOTSTRAP_RESTORE = true;
+if (FORCE_BOOTSTRAP_RESTORE) {
+  void restoreFromBuiltinBackup(true);
+} else {
+  refresh();
+}
