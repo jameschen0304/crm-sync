@@ -32,6 +32,18 @@ function resolveApiUrl(path) {
   return `${base}${path}`;
 }
 
+function needsExplicitApiBase() {
+  // Static hosting (e.g. GitHub Pages) cannot serve FastAPI /api routes.
+  // In these environments, users must configure a real backend origin.
+  if (apiOrigin()) return false;
+  try {
+    const h = (window.location.hostname || "").toLowerCase();
+    return h.endsWith(".github.io") || h.endsWith(".netlify.app") || h.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 /** 仅在没有配置远程 API 时走浏览器本地存根；配置了 crm_api_base 后必须始终请求网络，否则会永远看不到服务器最新数据 */
 function useLocalApiStub() {
   return USE_LOCAL_MODE && !apiOrigin();
@@ -1504,6 +1516,10 @@ function initCloudSyncForm() {
 
 async function authRegister() {
   const root = apiOrigin();
+  if (needsExplicitApiBase()) {
+    setMsg("请先填写并保存 API 地址，再进行邮箱注册/登录。", "error");
+    return;
+  }
   const email = (q("crmLoginEmail")?.value || "").trim();
   const password = q("crmLoginPassword")?.value || "";
   if (!email.includes("@")) {
@@ -1537,6 +1553,10 @@ async function authRegister() {
 
 async function authLogin() {
   const root = apiOrigin();
+  if (needsExplicitApiBase()) {
+    setMsg("请先填写并保存 API 地址，再进行邮箱注册/登录。", "error");
+    return;
+  }
   const email = (q("crmLoginEmail")?.value || "").trim();
   const password = q("crmLoginPassword")?.value || "";
   if (!email || !password) {
