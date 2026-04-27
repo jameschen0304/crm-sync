@@ -499,11 +499,18 @@ q("btnTodoRestore").addEventListener("click", () => {
 });
 
 todoItems = loadTodoItems();
-if (!todoItems.length) {
+{
   const snap = loadTodoSnapshot();
+  // Always prioritize snapshot recovery when available.
+  // This prevents stale/empty main storage from hiding previously saved todos.
   if (snap.length) {
-    todoItems = snap;
-    saveTodoItems();
+    const shouldRestore =
+      !todoItems.length ||
+      JSON.stringify(todoItems) !== JSON.stringify(snap);
+    if (shouldRestore) {
+      todoItems = snap;
+      saveTodoItems();
+    }
   }
 }
 seedHolidayTodos();

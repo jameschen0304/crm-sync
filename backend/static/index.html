@@ -87,11 +87,21 @@
             <button id="btnRefresh" class="btn btn-secondary">刷新</button>
             <button id="btnExportData" class="btn btn-secondary">导出数据(JSON)</button>
             <button id="btnImportData" class="btn btn-secondary">导入数据(JSON)</button>
-            <button id="btnRestoreBuiltin" class="btn btn-secondary">一键恢复内置数据</button>
             <input id="importDataFile" type="file" accept="application/json" style="display:none;" />
           </div>
           <div class="sidebar-block sidebar-cloud">
             <h3 class="sidebar-subh">登录</h3>
+            <label class="label-compact"
+              >API 地址（可选）
+              <input
+                id="crmApiBase"
+                class="input"
+                type="url"
+                placeholder="例如：https://your-api.onrender.com"
+                autocomplete="url"
+              />
+            </label>
+            <button type="button" id="btnSaveApiBase" class="btn btn-secondary btn-compact">保存 API 地址</button>
             <label class="label-compact"
               >邮箱
               <input
@@ -347,10 +357,10 @@
 
     <script>
       window.CRM_API_BASE = "";
-      window.__CRM_ASSET_V = "20260427c";
+      window.__CRM_ASSET_V = "20260427d";
       var a = document.getElementById("crmNavTodo");
-      if (a) a.href = "./todo.html?v=20260427c";
+      if (a) a.href = "./todo.html?v=20260427d";
     </script>
-    <script src="./app.js?v=20260427c"></script>
+    <script src="./app.js?v=20260427d"></script>
   </body>
 </html>

@@ -70,8 +70,6 @@ const HOLIDAYS_MMDD = new Set([
 const REGION_ORDER = ["东南亚", "南亚", "欧美澳", "中东", "中亚", "非洲", "中南美"];
 const DAILY_SETTINGS_KEY = "crm_daily_settings";
 const LOCAL_DATA_KEY = "crm_companies_local_v1";
-const AUTO_SEED_FLAG_KEY = "crm_seed_imported_v1";
-const REMOTE_BACKUP_URL = "https://raw.githubusercontent.com/jameschen0304/crm-sync/main/backend/static/crm-recovered-data.json";
 let USE_LOCAL_MODE = window.location.protocol === "file:";
 
 // 选择国家后自动填默认时区（IANA）
@@ -1366,52 +1364,6 @@ function localDeleteCompany(id) {
   return { ok: true };
 }
 
-function skipHostedSnapshotSeed() {
-  try {
-    const h = (window.location.hostname || "").toLowerCase();
-    if (h.endsWith(".github.io")) return true;
-    if (h.endsWith(".netlify.app")) return true;
-    if (h.endsWith(".vercel.app")) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-async function tryAutoSeedFromHostedJSON() {
-  if (skipHostedSnapshotSeed()) return false;
-  const alreadySeeded = localStorage.getItem(AUTO_SEED_FLAG_KEY) === "1";
-  if (alreadySeeded && localListCompanies().length > 0) return false;
-  if (localListCompanies().length > 0) {
-    localStorage.setItem(AUTO_SEED_FLAG_KEY, "1");
-    return false;
-  }
-  try {
-    const v =
-      typeof window !== "undefined" && window.__CRM_ASSET_V
-        ? String(window.__CRM_ASSET_V)
-        : (() => {
-            try {
-              const t = Date.parse(document.lastModified);
-              return !Number.isNaN(t) ? String(t) : String(Date.now());
-            } catch {
-              return String(Date.now());
-            }
-          })();
-    const res = await fetch(`./crm-recovered-data.json?v=${encodeURIComponent(v)}`);
-    if (!res.ok) return false;
-    const data = await res.json();
-    const rows = Array.isArray(data) ? data : data?.rows;
-    const normalized = normalizeImportedRows(rows);
-    if (!normalized.length) return false;
-    localSaveCompanies(normalized);
-    localStorage.setItem(AUTO_SEED_FLAG_KEY, "1");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function normalizeImportedRows(rows) {
   if (!Array.isArray(rows)) return [];
   const now = new Date().toISOString();
@@ -1503,24 +1455,35 @@ async function importLocalDataFromFile(file) {
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
 }
 
-function removeLegacyApiBaseUi() {
-  try {
-    document.getElementById("btnSaveApiBase")?.remove();
-    const inp = document.getElementById("crmApiBase");
-    if (inp) {
-      const lab = inp.closest("label");
-      if (lab) lab.remove();
-      else inp.remove();
+function saveApiBaseSetting() {
+  const el = q("crmApiBase");
+  if (!el) return;
+  const raw = String(el.value || "").trim();
+  if (!raw) {
+    try {
+      localStorage.removeItem("crm_api_base");
+    } catch {
+      /* ignore */
     }
-    document.querySelectorAll(".sidebar-cloud-note").forEach((el) => el.remove());
+    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    setMsg("已清空 API 地址，将优先使用同域 /api。", "ok");
+    return;
+  }
+  try {
+    const u = new URL(raw);
+    const normalized = `${u.protocol}//${u.host}`;
+    localStorage.setItem("crm_api_base", normalized);
+    if (typeof window !== "undefined") window.CRM_API_BASE = normalized;
+    el.value = normalized;
+    setMsg("API 地址已保存。", "ok");
   } catch {
-    /* ignore */
+    setMsg("API 地址格式不正确。", "error");
   }
 }
 
 function initCloudSyncForm() {
-  removeLegacyApiBaseUi();
   const elE = q("crmLoginEmail");
+  const elApi = q("crmApiBase");
   try {
     ["crm_api_key", "crm_auth_mode", "crm_account_email"].forEach((k) => {
       try {
@@ -1530,6 +1493,10 @@ function initCloudSyncForm() {
       }
     });
     if (elE) elE.value = localStorage.getItem(CRM_LAST_EMAIL_KEY) || "";
+    if (elApi) {
+      const savedBase = localStorage.getItem("crm_api_base") || "";
+      if (savedBase) elApi.value = savedBase;
+    }
   } catch {
     /* ignore */
   }
@@ -1537,10 +1504,6 @@ function initCloudSyncForm() {
 
 async function authRegister() {
   const root = apiOrigin();
-  if (!root) {
-    setMsg("当前无法连接服务器，请稍后再试。", "error");
-    return;
-  }
   const email = (q("crmLoginEmail")?.value || "").trim();
   const password = q("crmLoginPassword")?.value || "";
   if (!email.includes("@")) {
@@ -1552,7 +1515,7 @@ async function authRegister() {
     return;
   }
   try {
-    const res = await fetch(`${root}/api/auth/register`, {
+    const res = await fetch(resolveApiUrl("/api/auth/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -1562,8 +1525,7 @@ async function authRegister() {
     const data = JSON.parse(text);
     if (!data.access_token) throw new Error("无 token");
     localStorage.setItem(CRM_JWT_KEY, data.access_token);
-    localStorage.setItem("crm_api_base", root);
-    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    if (root) localStorage.setItem("crm_api_base", root);
     localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
     USE_LOCAL_MODE = false;
     await refresh();
@@ -1575,10 +1537,6 @@ async function authRegister() {
 
 async function authLogin() {
   const root = apiOrigin();
-  if (!root) {
-    setMsg("当前无法连接服务器，请稍后再试。", "error");
-    return;
-  }
   const email = (q("crmLoginEmail")?.value || "").trim();
   const password = q("crmLoginPassword")?.value || "";
   if (!email || !password) {
@@ -1586,7 +1544,7 @@ async function authLogin() {
     return;
   }
   try {
-    const res = await fetch(`${root}/api/auth/login`, {
+    const res = await fetch(resolveApiUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -1596,8 +1554,7 @@ async function authLogin() {
     const data = JSON.parse(text);
     if (!data.access_token) throw new Error("无 token");
     localStorage.setItem(CRM_JWT_KEY, data.access_token);
-    localStorage.setItem("crm_api_base", root);
-    if (typeof window !== "undefined") window.CRM_API_BASE = "";
+    if (root) localStorage.setItem("crm_api_base", root);
     localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
     USE_LOCAL_MODE = false;
     await refresh();
@@ -1618,50 +1575,11 @@ function authLogout() {
   setMsg("已退出登录。", "ok");
 }
 
-async function restoreFromBuiltinBackup(force = false) {
-  if (!force) {
-    const ok = confirm("确认恢复内置备份数据？这会覆盖当前离线客户数据。");
-    if (!ok) return;
-  }
-  try {
-    // 优先从 GitHub 原始备份恢复，失败再回退本地静态文件
-    let data = null;
-    let res = await fetch(`${REMOTE_BACKUP_URL}?t=${Date.now()}`);
-    if (res.ok) {
-      data = await res.json();
-    } else {
-      res = await fetch("./crm-recovered-data.json?v=20260331b");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      data = await res.json();
-    }
-    const rows = Array.isArray(data) ? data : data?.rows;
-    const normalized = normalizeImportedRows(rows);
-    if (!normalized.length) throw new Error("内置备份为空");
-    USE_LOCAL_MODE = true;
-    localSaveCompanies(normalized);
-    localStorage.setItem(AUTO_SEED_FLAG_KEY, "1");
-    migrateLocalFollowUpDefaults();
-    companies = localListCompanies();
-    renderList();
-    startReminderLoop(60000);
-    setMsg(`已恢复内置备份，共 ${normalized.length} 条客户。`, "ok");
-    return true;
-  } catch (e) {
-    setMsg(`恢复失败：${String(e?.message || e)}`, "error");
-    return false;
-  }
-}
-
 async function refresh() {
   const hadRemote = Boolean(apiOrigin());
   if (hadRemote) USE_LOCAL_MODE = false;
   try {
     companies = await apiGet("/api/companies");
-    if (!companies.length) {
-      // 数据意外为空时自动回灌内置备份，避免用户看到“空库”
-      await restoreFromBuiltinBackup(true);
-      return;
-    }
     if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
     else setMsg("");
     renderList();
@@ -1669,18 +1587,10 @@ async function refresh() {
   } catch (e) {
     // 无法连接后端时，自动切换离线 HTML 模式，方便在其他电脑直接使用
     USE_LOCAL_MODE = true;
-    const seeded = await tryAutoSeedFromHostedJSON();
     migrateLocalFollowUpDefaults();
     companies = localListCompanies();
-    if (!companies.length) {
-      // 无论登录状态如何，空库时都强制回灌内置备份
-      await restoreFromBuiltinBackup(true);
-      return;
-    }
-    if (seeded) setMsg("已自动导入历史数据，并切换为离线 HTML 模式。", "ok");
-    else if (skipHostedSnapshotSeed())
-      setMsg("未连接服务器，请先登录。", "error");
-    else setMsg("未连接到后端，已自动切换为离线 HTML 模式。", "ok");
+    if (apiOrigin()) setMsg("未连接到服务器，请检查 API 地址或登录状态。", "error");
+    else setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
     renderList();
     startReminderLoop(60000);
   }
@@ -1700,9 +1610,9 @@ bindClick("btnAuthRegister", () => {
 bindClick("btnAuthLogout", () => {
   authLogout();
 });
+bindClick("btnSaveApiBase", saveApiBaseSetting);
 bindClick("btnExportData", exportCurrentData);
 bindClick("btnImportData", () => q("importDataFile").click());
-bindClick("btnRestoreBuiltin", restoreFromBuiltinBackup);
 q("importDataFile").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
   ev.target.value = "";
@@ -1890,9 +1800,13 @@ q("btnDetailEdit").addEventListener("click", () => {
   if (editBtn) editBtn.click();
 });
 initCloudSyncForm();
-const FORCE_BOOTSTRAP_RESTORE = true;
-if (FORCE_BOOTSTRAP_RESTORE) {
-  void restoreFromBuiltinBackup(true);
-} else {
-  refresh();
+try {
+  const CLEAR_FLAG = "crm_customer_clear_20260427_done";
+  if (localStorage.getItem(CLEAR_FLAG) !== "1") {
+    localSaveCompanies([]);
+    localStorage.setItem(CLEAR_FLAG, "1");
+  }
+} catch {
+  /* ignore */
 }
+refresh();
