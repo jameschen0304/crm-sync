@@ -1,4 +1,5 @@
 const TODO_DATA_KEY = "crm_todo_items_v1";
+const TODO_SNAPSHOT_KEY = "crm_todo_items_snapshot_v1";
 let todoItems = [];
 let editingTodoId = null;
 const TODO_HOLIDAY_SEED_FLAG_KEY = "crm_todo_holiday_seeded_v1";
@@ -123,8 +124,20 @@ function loadTodoItems() {
   }
 }
 
+function loadTodoSnapshot() {
+  try {
+    const raw = localStorage.getItem(TODO_SNAPSHOT_KEY);
+    if (!raw) return [];
+    const rows = JSON.parse(raw);
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 function saveTodoItems() {
   localStorage.setItem(TODO_DATA_KEY, JSON.stringify(todoItems));
+  localStorage.setItem(TODO_SNAPSHOT_KEY, JSON.stringify(todoItems));
 }
 
 function seedHolidayTodos() {
@@ -465,8 +478,34 @@ q("btnTodoClearDone").addEventListener("click", () => {
   saveTodoItems();
   renderTodoList();
 });
+q("btnTodoRestore").addEventListener("click", () => {
+  const ok = confirm("确认恢复每日 To-Do 数据？优先恢复最近快照；若无快照则恢复内置节日任务。");
+  if (!ok) return;
+  const snap = loadTodoSnapshot();
+  if (snap.length) {
+    todoItems = snap;
+    saveTodoItems();
+    renderTodoList();
+    alert(`已从快照恢复 ${snap.length} 条 To-Do。`);
+    return;
+  }
+  todoItems = loadTodoItems();
+  seedHolidayTodos();
+  seedWesternSameDayTodos();
+  seedExtra2026Todos();
+  saveTodoItems();
+  renderTodoList();
+  alert(`没有找到快照，已恢复内置节日任务，共 ${todoItems.length} 条。`);
+});
 
 todoItems = loadTodoItems();
+if (!todoItems.length) {
+  const snap = loadTodoSnapshot();
+  if (snap.length) {
+    todoItems = snap;
+    saveTodoItems();
+  }
+}
 seedHolidayTodos();
 seedWesternSameDayTodos();
 seedExtra2026Todos();
