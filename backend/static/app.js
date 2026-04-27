@@ -1478,7 +1478,19 @@ async function importLocalDataFromFile(file) {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error("JSON 格式不正确");
+    // 容错：有些复制内容会在 JSON 后混入杂文本，尝试提取首个 JSON 对象
+    const cleaned = String(text || "").replace(/^\uFEFF/, "").trim();
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        parsed = JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        throw new Error("JSON 格式不正确");
+      }
+    } else {
+      throw new Error("JSON 格式不正确");
+    }
   }
   const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
   const normalized = normalizeImportedRows(rows);
