@@ -1,5 +1,6 @@
 const CRM_JWT_KEY = "crm_jwt";
 const CRM_LAST_EMAIL_KEY = "crm_last_login_email";
+const DEFAULT_REMOTE_API_BASE = "https://crm-sync-api.onrender.com";
 
 function apiHeaders() {
   const h = { "Content-Type": "application/json" };
@@ -23,6 +24,12 @@ function apiOrigin() {
   } catch {
     /* ignore */
   }
+  try {
+    const h = (window.location.hostname || "").toLowerCase();
+    if (h.endsWith(".github.io")) return DEFAULT_REMOTE_API_BASE;
+  } catch {
+    /* ignore */
+  }
   return "";
 }
 
@@ -30,18 +37,6 @@ function resolveApiUrl(path) {
   const base = apiOrigin();
   if (!base || !String(path).startsWith("/")) return path;
   return `${base}${path}`;
-}
-
-function needsExplicitApiBase() {
-  // Static hosting (e.g. GitHub Pages) cannot serve FastAPI /api routes.
-  // In these environments, users must configure a real backend origin.
-  if (apiOrigin()) return false;
-  try {
-    const h = (window.location.hostname || "").toLowerCase();
-    return h.endsWith(".github.io") || h.endsWith(".netlify.app") || h.endsWith(".vercel.app");
-  } catch {
-    return false;
-  }
 }
 
 /** 仅在没有配置远程 API 时走浏览器本地存根；配置了 crm_api_base 后必须始终请求网络，否则会永远看不到服务器最新数据 */
@@ -1468,34 +1463,11 @@ async function importLocalDataFromFile(file) {
 }
 
 function saveApiBaseSetting() {
-  const el = q("crmApiBase");
-  if (!el) return;
-  const raw = String(el.value || "").trim();
-  if (!raw) {
-    try {
-      localStorage.removeItem("crm_api_base");
-    } catch {
-      /* ignore */
-    }
-    if (typeof window !== "undefined") window.CRM_API_BASE = "";
-    setMsg("已清空 API 地址，将优先使用同域 /api。", "ok");
-    return;
-  }
-  try {
-    const u = new URL(raw);
-    const normalized = `${u.protocol}//${u.host}`;
-    localStorage.setItem("crm_api_base", normalized);
-    if (typeof window !== "undefined") window.CRM_API_BASE = normalized;
-    el.value = normalized;
-    setMsg("API 地址已保存。", "ok");
-  } catch {
-    setMsg("API 地址格式不正确。", "error");
-  }
+  // API address is now fixed for email-login mode.
 }
 
 function initCloudSyncForm() {
   const elE = q("crmLoginEmail");
-  const elApi = q("crmApiBase");
   try {
     ["crm_api_key", "crm_auth_mode", "crm_account_email"].forEach((k) => {
       try {
@@ -1505,9 +1477,9 @@ function initCloudSyncForm() {
       }
     });
     if (elE) elE.value = localStorage.getItem(CRM_LAST_EMAIL_KEY) || "";
-    if (elApi) {
-      const savedBase = localStorage.getItem("crm_api_base") || "";
-      if (savedBase) elApi.value = savedBase;
+    localStorage.setItem("crm_api_base", DEFAULT_REMOTE_API_BASE);
+    if (typeof window !== "undefined" && !window.CRM_API_BASE) {
+      window.CRM_API_BASE = DEFAULT_REMOTE_API_BASE;
     }
   } catch {
     /* ignore */
@@ -1516,10 +1488,6 @@ function initCloudSyncForm() {
 
 async function authRegister() {
   const root = apiOrigin();
-  if (needsExplicitApiBase()) {
-    setMsg("请先填写并保存 API 地址，再进行邮箱注册/登录。", "error");
-    return;
-  }
   const email = (q("crmLoginEmail")?.value || "").trim();
   const password = q("crmLoginPassword")?.value || "";
   if (!email.includes("@")) {
@@ -1553,10 +1521,6 @@ async function authRegister() {
 
 async function authLogin() {
   const root = apiOrigin();
-  if (needsExplicitApiBase()) {
-    setMsg("请先填写并保存 API 地址，再进行邮箱注册/登录。", "error");
-    return;
-  }
   const email = (q("crmLoginEmail")?.value || "").trim();
   const password = q("crmLoginPassword")?.value || "";
   if (!email || !password) {
