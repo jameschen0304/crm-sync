@@ -347,18 +347,10 @@
 
     <script>
       window.CRM_API_BASE = "";
-      window.__CRM_ASSET_V = "20260427b";
+      window.__CRM_ASSET_V = "20260427c";
+      var a = document.getElementById("crmNavTodo");
+      if (a) a.href = "./todo.html?v=20260427c";
     </script>
-    <script>
-      (function () {
-        var a = document.getElementById("crmNavTodo");
-        if (a) a.href = "./todo.html?v=" + encodeURIComponent(window.__CRM_ASSET_V || "0");
-        document.write(
-          '<script src="./app.js?v=' +
-            encodeURIComponent(window.__CRM_ASSET_V || "0") +
-            '"><\\/script>'
-        );
-      })();
-    </script>
+    <script src="./app.js?v=20260427c"></script>
   </body>
 </html>
