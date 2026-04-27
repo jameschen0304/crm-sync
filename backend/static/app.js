@@ -1,6 +1,6 @@
 const CRM_JWT_KEY = "crm_jwt";
 const CRM_LAST_EMAIL_KEY = "crm_last_login_email";
-const DEFAULT_REMOTE_API_BASE = "https://crm-sync-api.onrender.com";
+const DEFAULT_REMOTE_API_BASE = "https://crm-sync.onrender.com";
 
 function apiHeaders() {
   const h = { "Content-Type": "application/json" };
