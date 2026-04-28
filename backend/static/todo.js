@@ -14,7 +14,7 @@ const HOLIDAY_EVENTS = [
   { m: 4, d: 13, name: "宋干节", market: "泰国", factory: "红厂", give: "4月10日" },
   { m: 5, d: 1, name: "国际劳动节", market: "全球", factory: "红厂", give: "4月28日" },
   { m: 5, d: 25, name: "非洲日 (Africa Day)", market: "全非洲", factory: "康宁", give: "5月22日" },
-  { m: 5, d: 27, name: "古尔邦节 (Eid al-Adha)", market: "中东/东南亚/伊朗", factory: "红厂", give: "5月24日" },
+  { m: 6, d: 27, name: "古尔邦节 (Eid al-Adha)", market: "中东/东南亚/伊朗", factory: "红厂", give: "6月24日" },
   { m: 8, d: 15, name: "韩国光复节", market: "韩国", factory: "红厂", give: "8月12日" },
   { m: 9, d: 7, name: "巴西独立日", market: "拉美", factory: "康宁", give: "9月4日" },
   { m: 9, d: 23, name: "沙特国庆日", market: "中东(沙特)", factory: "康宁", give: "9月20日" },
@@ -91,6 +91,11 @@ const WESTERN_SAME_DAY_EVENTS = [
   { m: 12, d: 31, name: "新年前夜 (New Year's Eve)", market: "欧美/全球", factory: "康宁", give: "" },
 ];
 
+const WEEKLY_ROUTINE_TASKS = [
+  { key: "weekly:rnd-video", text: "每周一发研视频", weekday: 1, priority: "high", meta: "固定周任务" },
+  { key: "weekly:carousel-post", text: "每周三发轮播图文", weekday: 3, priority: "high", meta: "固定周任务" },
+];
+
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -103,6 +108,16 @@ function addDays(d, days) {
   const nd = new Date(d);
   nd.setDate(nd.getDate() + days);
   return nd;
+}
+
+function nextWeekdayDateStr(weekday) {
+  // weekday: 1=Monday ... 7=Sunday
+  const today = new Date();
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+  const jsWeekday = d.getDay() === 0 ? 7 : d.getDay();
+  const delta = (weekday - jsWeekday + 7) % 7;
+  d.setDate(d.getDate() + delta);
+  return dateToStr(d);
 }
 
 function q(id) {
@@ -153,40 +168,38 @@ function seedHolidayTodos() {
   let added = 0;
 
   for (const e of HOLIDAY_EVENTS) {
-    for (let t = 3; t >= 1; t -= 1) {
-      // t=3 代表“到期前三天”（提醒日=节日当天-3）
-      // 找到第一年的提醒日未过
-      let year = curYear;
-      for (let safety = 0; safety < 3; safety += 1) {
-        const holiday = new Date(year, e.m - 1, e.d, 12, 0, 0);
-        const remind = addDays(holiday, -t);
-        if (remind.getTime() >= todayMid.getTime()) {
-          const due = dateToStr(remind);
-          const key = `${year}-${e.m}-${e.d}-${e.name}-T${t}`;
-          if (!existingKeys.has(key)) {
-            const prefix = `节日节点：${e.name}`;
-            const suffix = `（T-${t}）`;
-            const baseText = `${prefix}${suffix} - ${e.market}`;
-            const text = baseText.length > 160 ? baseText.slice(0, 157) + "..." : baseText;
-            todoItems.unshift({
-              id: nextId++,
-              key,
-              text,
-              due_date: due,
-              repeat: "none",
-              priority: "medium",
-              done: false,
-              created_at: now,
-              updated_at: now,
-              meta: `给到日期：${e.give}；制作：${e.factory}`,
-            });
-            existingKeys.add(key);
-            added += 1;
-          }
-          break;
+    const t = 3;
+    // 仅“提前 3 天”提醒（提醒日=节日当天-3）
+    let year = curYear;
+    for (let safety = 0; safety < 3; safety += 1) {
+      const holiday = new Date(year, e.m - 1, e.d, 12, 0, 0);
+      const remind = addDays(holiday, -t);
+      if (remind.getTime() >= todayMid.getTime()) {
+        const due = dateToStr(remind);
+        const key = `${year}-${e.m}-${e.d}-${e.name}-T${t}`;
+        if (!existingKeys.has(key)) {
+          const prefix = `节日节点：${e.name}`;
+          const suffix = `（T-${t}）`;
+          const baseText = `${prefix}${suffix} - ${e.market}`;
+          const text = baseText.length > 160 ? baseText.slice(0, 157) + "..." : baseText;
+          todoItems.unshift({
+            id: nextId++,
+            key,
+            text,
+            due_date: due,
+            repeat: "none",
+            priority: "medium",
+            done: false,
+            created_at: now,
+            updated_at: now,
+            meta: `给到日期：${e.give}；制作：${e.factory}`,
+          });
+          existingKeys.add(key);
+          added += 1;
         }
-        year += 1;
+        break;
       }
+      year += 1;
     }
   }
 
@@ -234,6 +247,33 @@ function seedWesternSameDayTodos() {
       }
       break;
     }
+  }
+
+  if (added > 0) saveTodoItems();
+}
+
+function seedWeeklyRoutineTodos() {
+  const existingKeys = new Set(todoItems.map((x) => x.key).filter(Boolean));
+  const now = new Date().toISOString();
+  let nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
+  let added = 0;
+
+  for (const task of WEEKLY_ROUTINE_TASKS) {
+    if (existingKeys.has(task.key)) continue;
+    todoItems.unshift({
+      id: nextId++,
+      key: task.key,
+      text: task.text,
+      due_date: nextWeekdayDateStr(task.weekday),
+      repeat: "weekly",
+      priority: task.priority || "medium",
+      done: false,
+      created_at: now,
+      updated_at: now,
+      meta: task.meta || "",
+    });
+    existingKeys.add(task.key);
+    added += 1;
   }
 
   if (added > 0) saveTodoItems();
@@ -493,6 +533,7 @@ q("btnTodoRestore").addEventListener("click", () => {
   seedHolidayTodos();
   seedWesternSameDayTodos();
   seedExtra2026Todos();
+  seedWeeklyRoutineTodos();
   saveTodoItems();
   renderTodoList();
   alert(`没有找到快照，已恢复内置节日任务，共 ${todoItems.length} 条。`);
@@ -516,4 +557,5 @@ todoItems = loadTodoItems();
 seedHolidayTodos();
 seedWesternSameDayTodos();
 seedExtra2026Todos();
+seedWeeklyRoutineTodos();
 renderTodoList();
