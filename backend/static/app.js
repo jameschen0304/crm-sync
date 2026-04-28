@@ -661,7 +661,7 @@ function migrateLocalFollowUpDefaults() {
     let stage = r.follow_up_stage;
     let mondayEnabled = r.monday_routine_enabled || null;
     let mondayNext = r.monday_next_follow_up_at || null;
-    const hasWhatsApp = Boolean(String(r.whatsapp || "").trim());
+    const hasContact = Boolean(String(r.whatsapp || "").trim() || String(r.wechat || "").trim());
     // 兼容旧版本把“周一例行”塞在主阶段里的数据
     if (stage === "周一例行") {
       mondayEnabled = "1";
@@ -680,7 +680,7 @@ function migrateLocalFollowUpDefaults() {
       next = computeNextFollowUpISO(stage, now);
     }
     const nextWas = r.next_follow_up_at;
-    if (!hasWhatsApp) {
+    if (!hasContact) {
       mondayEnabled = null;
       mondayNext = null;
     } else {
@@ -978,8 +978,8 @@ function renderList() {
       const effectiveRegion = c.region || countryToRegion(c.country_code || "") || "";
       const regionChip = effectiveRegion ? `<span class="chip">${escapeHtml(effectiveRegion)}</span>` : "";
       const stageChip = c.follow_up_stage ? `<span class="chip">${escapeHtml(c.follow_up_stage)}</span>` : `<span class="chip">未设跟进</span>`;
-      const hasWhatsApp = Boolean(String(c.whatsapp || "").trim());
-      const mondayChip = hasWhatsApp && c.monday_routine_enabled === "1" ? `<span class="chip chip-warn">周一例行</span>` : "";
+      const hasContact = Boolean(String(c.whatsapp || "").trim() || String(c.wechat || "").trim());
+      const mondayChip = hasContact && c.monday_routine_enabled === "1" ? `<span class="chip chip-warn">周一例行</span>` : "";
       let followStatus = "未设置";
       let followStatusClass = "chip";
       if (c.next_follow_up_at) {
@@ -1014,7 +1014,7 @@ function renderList() {
             <div class="meta">${escapeHtml(c.timezone)} · ${escapeHtml(c.country_code || "—")} · 本地时间 ${escapeHtml(timeStr || "—")}（${escapeHtml(dateStr || "—")}）</div>
             <div class="meta">其他链接：${links || "—"}</div>
             <div class="meta">下次跟进：${c.next_follow_up_at ? escapeHtml(new Date(c.next_follow_up_at).toLocaleString()) : "—"} · 最近跟进：${c.last_follow_up_at ? escapeHtml(new Date(c.last_follow_up_at).toLocaleString()) : "—"} · <span class="${followStatusClass}">${followStatus}</span></div>
-            <div class="meta">周一例行：${hasWhatsApp ? (c.monday_routine_enabled === "1" ? "开启" : "关闭") : "关闭（无WhatsApp）"} · 下次：${c.monday_next_follow_up_at ? escapeHtml(new Date(c.monday_next_follow_up_at).toLocaleString()) : "—"} · 最近备注：${escapeHtml(c.monday_last_follow_up_note || "—")}</div>
+            <div class="meta">周一例行：${hasContact ? (c.monday_routine_enabled === "1" ? "开启" : "关闭") : "关闭（无微信/WhatsApp）"} · 下次：${c.monday_next_follow_up_at ? escapeHtml(new Date(c.monday_next_follow_up_at).toLocaleString()) : "—"} · 最近备注：${escapeHtml(c.monday_last_follow_up_note || "—")}</div>
             <details class="mini-details">
               <summary>跟进记录（${escapeHtml(c.last_follow_up_channel || "—")}）</summary>
               <div class="mini-details-body">
@@ -1033,7 +1033,7 @@ function renderList() {
           </div>
           <div class="actions">
             <button class="btn" data-follow="${c.id}">已跟进</button>
-            ${hasWhatsApp && c.monday_routine_enabled === "1" ? `<button class="btn btn-secondary" data-monday-follow="${c.id}">周一例行已发</button>` : ""}
+            ${hasContact && c.monday_routine_enabled === "1" ? `<button class="btn btn-secondary" data-monday-follow="${c.id}">周一例行已发</button>` : ""}
             <button class="btn btn-secondary" data-edit="${c.id}">编辑</button>
             <button class="btn btn-secondary" data-del="${c.id}">删除</button>
           </div>
@@ -1177,8 +1177,8 @@ function renderList() {
       const id = Number(btn.getAttribute("data-monday-follow"));
       const c = companies.find((x) => x.id === id);
       if (!c) return;
-      if (!String(c.whatsapp || "").trim()) {
-        setMsg(`客户 ${c.name} 未填写 WhatsApp，已取消周一例行。`, "error");
+      if (!String(c.whatsapp || "").trim() && !String(c.wechat || "").trim()) {
+        setMsg(`客户 ${c.name} 未填写微信或 WhatsApp，已取消周一例行。`, "error");
         await apiPut(`/api/companies/${id}`, {
           ...c,
           monday_routine_enabled: null,
@@ -1941,7 +1941,7 @@ q("companyForm").addEventListener("submit", async (ev) => {
   if (!payload.next_follow_up_at && payload.follow_up_stage && payload.follow_up_stage !== "暂停") {
     payload.next_follow_up_at = computeNextFollowUpISO(payload.follow_up_stage, new Date());
   }
-  if (!String(payload.whatsapp || "").trim()) {
+  if (!String(payload.whatsapp || "").trim() && !String(payload.wechat || "").trim()) {
     payload.monday_routine_enabled = null;
     payload.monday_next_follow_up_at = null;
   }
@@ -1986,8 +1986,8 @@ q("follow_up_stage").addEventListener("change", () => {
 });
 q("monday_routine_enabled").addEventListener("change", () => {
   const enabled = q("monday_routine_enabled").value === "1";
-  if (enabled && !String(q("whatsapp").value || "").trim()) {
-    setMsg("该客户未填写 WhatsApp，不能开启周一例行。", "error");
+  if (enabled && !String(q("whatsapp").value || "").trim() && !String(q("wechat").value || "").trim()) {
+    setMsg("该客户未填写微信或 WhatsApp，不能开启周一例行。", "error");
     q("monday_routine_enabled").value = "";
     q("monday_next_follow_up_at").value = "";
     return;
@@ -2016,9 +2016,11 @@ q("btnViewCompact").addEventListener("click", () => {
 });
 q("btnSaveDailySettings").addEventListener("click", saveDailySettings);
 q("btnBatchEnableMonday").addEventListener("click", async () => {
-  const targets = getFilteredCompaniesNow().filter((c) => c.monday_routine_enabled !== "1" && String(c.whatsapp || "").trim());
+  const targets = getFilteredCompaniesNow().filter(
+    (c) => c.monday_routine_enabled !== "1" && (String(c.whatsapp || "").trim() || String(c.wechat || "").trim())
+  );
   if (!targets.length) {
-    setMsg("当前筛选结果中没有可开启周一例行的客户（需已填写 WhatsApp）。", "ok");
+    setMsg("当前筛选结果中没有可开启周一例行的客户（需已填写微信或 WhatsApp）。", "ok");
     return;
   }
   if (!confirm(`确认批量开启周一例行？将影响 ${targets.length} 个客户。`)) return;

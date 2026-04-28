@@ -178,10 +178,11 @@ def compute_next_monday_at(from_dt: datetime) -> datetime:
 
 
 def _normalize_monday_routine_fields(data: dict) -> dict:
-    """周一例行仅对有 WhatsApp 的客户生效。"""
+    """周一例行仅对有微信或 WhatsApp 的客户生效。"""
     whatsapp = (data.get("whatsapp") or "").strip()
+    wechat = (data.get("wechat") or "").strip()
     enabled = data.get("monday_routine_enabled") == "1"
-    if enabled and whatsapp:
+    if enabled and (whatsapp or wechat):
         data["monday_routine_enabled"] = "1"
         if data.get("monday_next_follow_up_at") is None:
             data["monday_next_follow_up_at"] = compute_next_monday_at(datetime.utcnow())
@@ -219,8 +220,8 @@ def migrate_follow_up_defaults() -> None:
             if row.monday_routine_enabled != "1" and row.monday_next_follow_up_at is not None:
                 row.monday_next_follow_up_at = None
                 changed = True
-            # 无 WhatsApp 的客户不允许周一例行
-            if not (row.whatsapp or "").strip():
+            # 无微信且无 WhatsApp 的客户不允许周一例行
+            if not (row.whatsapp or "").strip() and not (row.wechat or "").strip():
                 if row.monday_routine_enabled is not None:
                     row.monday_routine_enabled = None
                     changed = True
