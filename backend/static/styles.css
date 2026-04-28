@@ -218,10 +218,20 @@ label{display:grid;gap:6px;color:#4b7662;font-size:12.5px}
 .todo-form.is-editing .todo-form-actions .btn[type="submit"]{min-width:5.5em}
 .todo-toolbar{
   display:flex;
+  flex-wrap:wrap;
   gap:8px;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-start;
   margin-bottom:10px;
+}
+.todo-toolbar #todoFilter{
+  flex:1 1 200px;
+  min-width:0;
+  max-width:100%;
+}
+.todo-toolbar > .btn-secondary{
+  flex:0 0 auto;
+  white-space:nowrap;
 }
 .todo-stats-cards{
   display:grid;
