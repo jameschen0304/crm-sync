@@ -1599,6 +1599,30 @@ function formatLocalUploadReport(r) {
   return parts.join("；");
 }
 
+/** 启动时显式校验登录态：token 无效才清理；网络抖动不清理，避免“刷新即退出”。 */
+async function verifySessionOnStartup() {
+  if (!apiOrigin() || !hasCrmJwt()) return true;
+  try {
+    const res = await fetch(resolveApiUrl("/api/auth/session"), { headers: apiHeaders() });
+    if (res.ok) return true;
+    const text = await res.text();
+    if (res.status === 401) {
+      try {
+        localStorage.removeItem(CRM_JWT_KEY);
+      } catch {
+        /* ignore */
+      }
+      setMsg("登录已失效，请重新点击「登录」。", "error");
+      return false;
+    }
+    setMsg(`会话校验失败：${parseApiErrorMessage(text, res.status)}`, "error");
+    return true;
+  } catch {
+    setMsg("网络异常，会话暂未校验；已保留登录状态。", "error");
+    return true;
+  }
+}
+
 function saveApiBaseSetting() {
   // API address is now fixed for email-login mode.
 }
@@ -2035,4 +2059,8 @@ try {
 } catch {
   /* ignore */
 }
-refresh();
+async function bootApp() {
+  await verifySessionOnStartup();
+  await refresh();
+}
+void bootApp();

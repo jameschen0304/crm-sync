@@ -359,6 +359,11 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
 
 
+class SessionOut(BaseModel):
+    user_id: int
+    email: str
+
+
 app = FastAPI(title="CRM Sync (Worktime Reminder)")
 
 # GitHub Pages 等静态站点跨域调用本 API（浏览器会先发 OPTIONS 预检）
@@ -432,6 +437,11 @@ def auth_login(payload: LoginBody, db: Session = Depends(get_db)) -> TokenOut:
     if not user or not pwd_context.verify(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Wrong email or password")
     return TokenOut(access_token=issue_access_token(user.id))
+
+
+@app.get("/api/auth/session", response_model=SessionOut)
+def auth_session(user: CrmUser = Depends(get_current_user)) -> SessionOut:
+    return SessionOut(user_id=user.id, email=user.email)
 
 
 @app.get("/api/companies", dependencies=[Depends(get_current_user)])
