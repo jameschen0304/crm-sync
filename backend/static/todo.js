@@ -151,8 +151,13 @@ function loadTodoSnapshot() {
 }
 
 function saveTodoItems() {
-  localStorage.setItem(TODO_DATA_KEY, JSON.stringify(todoItems));
-  localStorage.setItem(TODO_SNAPSHOT_KEY, JSON.stringify(todoItems));
+  try {
+    const raw = JSON.stringify(todoItems);
+    localStorage.setItem(TODO_DATA_KEY, raw);
+    localStorage.setItem(TODO_SNAPSHOT_KEY, raw);
+  } catch (e) {
+    console.warn("crm todo: localStorage save failed", e);
+  }
 }
 
 function seedHolidayTodos() {
@@ -206,7 +211,11 @@ function seedHolidayTodos() {
   if (added > 0) {
     saveTodoItems();
   }
-  localStorage.setItem(TODO_HOLIDAY_SEED_FLAG_KEY, "1");
+  try {
+    localStorage.setItem(TODO_HOLIDAY_SEED_FLAG_KEY, "1");
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 function seedWesternSameDayTodos() {
@@ -355,7 +364,8 @@ function renderTodoList() {
   const listEl = q("todoList");
   const statsEl = q("todoStats");
   const todayStr = getTodayDateStr();
-  const filter = (q("todoFilter")?.value || "pending").trim();
+  const filterEl = q("todoFilter");
+  const filter = ((filterEl && filterEl.value) || "pending").trim();
 
   const stats = {
     total: todoItems.length,
@@ -470,98 +480,103 @@ function renderTodoList() {
   });
 }
 
-q("todoForm").addEventListener("submit", (ev) => {
-  ev.preventDefault();
-  const text = q("todoText").value.trim();
-  if (!text) return;
-  const dueDate = (q("todoDueDate").value || "").trim() || null;
-  const repeat = (q("todoRepeat").value || "none").trim();
-  const priority = (q("todoPriority").value || "medium").trim();
-  const normalizedDue = repeat !== "none" ? (dueDate || getTodayDateStr()) : dueDate;
-  const normRepeat = ["none", "daily", "workday", "weekly", "monthly"].includes(repeat) ? repeat : "none";
-  const normPriority = ["high", "medium", "low"].includes(priority) ? priority : "medium";
-  const now = new Date().toISOString();
-
-  if (editingTodoId != null) {
-    const row = todoItems.find((x) => Number(x.id) === editingTodoId);
-    if (row) {
-      row.text = text;
-      row.due_date = normalizedDue;
-      row.repeat = normRepeat;
-      row.priority = normPriority;
-      row.updated_at = now;
-    }
-    saveTodoItems();
-    resetTodoForm();
-    renderTodoList();
-    return;
-  }
-
-  const nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
-  todoItems.unshift({
-    id: nextId,
-    text,
-    due_date: normalizedDue,
-    repeat: normRepeat,
-    priority: normPriority,
-    done: false,
-    created_at: now,
-    updated_at: now,
-  });
-  saveTodoItems();
-  resetTodoForm();
-  renderTodoList();
-});
-
-q("btnTodoCancelEdit").addEventListener("click", () => {
-  resetTodoForm();
-  renderTodoList();
-});
-
-q("todoFilter").addEventListener("change", renderTodoList);
-q("btnTodoClearDone").addEventListener("click", () => {
-  todoItems = todoItems.filter((x) => !x.done);
-  saveTodoItems();
-  renderTodoList();
-});
-q("btnTodoRestore").addEventListener("click", () => {
-  const ok = confirm("确认恢复每日 To-Do 数据？优先恢复最近快照；若无快照则恢复内置节日任务。");
-  if (!ok) return;
+function mergeSnapshotIntoTodoItems() {
   const snap = loadTodoSnapshot();
-  if (snap.length) {
-    todoItems = snap;
-    saveTodoItems();
-    renderTodoList();
-    alert(`已从快照恢复 ${snap.length} 条 To-Do。`);
-    return;
+  if (!snap.length) return;
+  const shouldRestore =
+    !todoItems.length || JSON.stringify(todoItems) !== JSON.stringify(snap);
+  if (shouldRestore) {
+    todoItems = snap.slice();
   }
-  todoItems = loadTodoItems();
+}
+
+function runAllSeeders() {
   seedHolidayTodos();
   seedWesternSameDayTodos();
   seedExtra2026Todos();
   seedWeeklyRoutineTodos();
-  saveTodoItems();
-  renderTodoList();
-  alert(`没有找到快照，已恢复内置节日任务，共 ${todoItems.length} 条。`);
-});
-
-todoItems = loadTodoItems();
-{
-  const snap = loadTodoSnapshot();
-  // Always prioritize snapshot recovery when available.
-  // This prevents stale/empty main storage from hiding previously saved todos.
-  if (snap.length) {
-    const shouldRestore =
-      !todoItems.length ||
-      JSON.stringify(todoItems) !== JSON.stringify(snap);
-    if (shouldRestore) {
-      todoItems = snap;
-      saveTodoItems();
-    }
-  }
 }
-seedHolidayTodos();
-seedWesternSameDayTodos();
-seedExtra2026Todos();
-seedWeeklyRoutineTodos();
+
+function initTodoData() {
+  todoItems = loadTodoItems();
+  mergeSnapshotIntoTodoItems();
+  runAllSeeders();
+  saveTodoItems();
+}
+
+function wireTodoPageEvents() {
+  q("todoForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const text = q("todoText").value.trim();
+    if (!text) return;
+    const dueDate = (q("todoDueDate").value || "").trim() || null;
+    const repeat = (q("todoRepeat").value || "none").trim();
+    const priority = (q("todoPriority").value || "medium").trim();
+    const normalizedDue = repeat !== "none" ? (dueDate || getTodayDateStr()) : dueDate;
+    const normRepeat = ["none", "daily", "workday", "weekly", "monthly"].includes(repeat) ? repeat : "none";
+    const normPriority = ["high", "medium", "low"].includes(priority) ? priority : "medium";
+    const now = new Date().toISOString();
+
+    if (editingTodoId != null) {
+      const row = todoItems.find((x) => Number(x.id) === editingTodoId);
+      if (row) {
+        row.text = text;
+        row.due_date = normalizedDue;
+        row.repeat = normRepeat;
+        row.priority = normPriority;
+        row.updated_at = now;
+      }
+      saveTodoItems();
+      resetTodoForm();
+      renderTodoList();
+      return;
+    }
+
+    const nextId = todoItems.length ? Math.max(...todoItems.map((x) => Number(x.id) || 0)) + 1 : 1;
+    todoItems.unshift({
+      id: nextId,
+      text,
+      due_date: normalizedDue,
+      repeat: normRepeat,
+      priority: normPriority,
+      done: false,
+      created_at: now,
+      updated_at: now,
+    });
+    saveTodoItems();
+    resetTodoForm();
+    renderTodoList();
+  });
+
+  q("btnTodoCancelEdit").addEventListener("click", () => {
+    resetTodoForm();
+    renderTodoList();
+  });
+
+  q("todoFilter").addEventListener("change", renderTodoList);
+  q("btnTodoClearDone").addEventListener("click", () => {
+    todoItems = todoItems.filter((x) => !x.done);
+    saveTodoItems();
+    renderTodoList();
+  });
+  q("btnTodoRestore").addEventListener("click", () => {
+    const ok = confirm(
+      "确认恢复每日 To-Do？若有快照会先恢复快照，并自动补齐内置节日与周任务；无快照则只生成内置任务。"
+    );
+    if (!ok) return;
+    const snap = loadTodoSnapshot();
+    if (snap.length) {
+      todoItems = snap.slice();
+    } else {
+      todoItems = loadTodoItems();
+    }
+    runAllSeeders();
+    saveTodoItems();
+    renderTodoList();
+    alert(`已恢复并合并内置任务，当前共 ${todoItems.length} 条 To-Do。`);
+  });
+}
+
+initTodoData();
 renderTodoList();
+wireTodoPageEvents();

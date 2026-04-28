@@ -7,21 +7,8 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <script>
-      (function () {
-        try {
-          var t = Date.parse(document.lastModified);
-          window.__CRM_ASSET_V = !Number.isNaN(t) ? String(t) : String(Date.now());
-        } catch (e) {
-          window.__CRM_ASSET_V = String(Date.now());
-        }
-        document.write(
-          '<link rel="stylesheet" href="./styles.css?v=' +
-            encodeURIComponent(window.__CRM_ASSET_V) +
-            '">'
-        );
-      })();
-    </script>
+    <script>window.__CRM_ASSET_V = "20260428j";</script>
+    <link rel="stylesheet" href="./styles.css?v=20260428j" />
   </head>
   <body>
     <main class="wrap">
@@ -37,6 +24,7 @@
         <div class="todo-headline">
           <h2>今日任务清单</h2>
           <p class="sub">默认「待完成」含未来截止（节日提醒、每周任务等）；若选「今日待办」则只显示截止≤今天或未设截止。</p>
+          <p class="sub" style="opacity: 0.75">页面版本 20260428j（若此处不是该版本说明仍在用缓存，请 Ctrl+F5）</p>
         </div>
         <form id="todoForm" class="todo-form">
           <input id="todoText" class="input" maxlength="160" placeholder="输入今天要完成的任务..." required />
@@ -85,18 +73,11 @@
     </main>
 
     <script>
-      window.__CRM_ASSET_V = "20260428d";
-    </script>
-    <script>
       (function () {
         var a = document.getElementById("crmNavBack");
         if (a) a.href = "./index.html?v=" + encodeURIComponent(window.__CRM_ASSET_V || "0");
-        document.write(
-          '<script src="./todo.js?v=' +
-            encodeURIComponent(window.__CRM_ASSET_V || "0") +
-            '"><\\/script>'
-        );
       })();
     </script>
+    <script src="./todo.js?v=20260428j" defer></script>
   </body>
  </html>
