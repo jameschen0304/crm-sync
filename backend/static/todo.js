@@ -365,7 +365,7 @@ function renderTodoList() {
   const statsEl = q("todoStats");
   const todayStr = getTodayDateStr();
   const filterEl = q("todoFilter");
-  const filter = ((filterEl && filterEl.value) || "pending").trim();
+  const filter = ((filterEl && filterEl.value) || "today_do").trim();
 
   const stats = {
     total: todoItems.length,
@@ -374,7 +374,9 @@ function renderTodoList() {
     today: todoItems.filter((x) => todoStatus(x, todayStr) === "today").length,
   };
   const pending = Math.max(0, stats.total - stats.done);
-  statsEl.textContent = `总计 ${stats.total} · 待办 ${pending} · 今天到期 ${stats.today} · 逾期 ${stats.overdue} · 完成 ${stats.done}`;
+  if (statsEl) {
+    statsEl.textContent = `总计 ${stats.total} · 待办 ${pending} · 今天到期 ${stats.today} · 逾期 ${stats.overdue} · 完成 ${stats.done}`;
+  }
   if (q("todoStatTotal")) q("todoStatTotal").textContent = String(stats.total);
   if (q("todoStatPending")) q("todoStatPending").textContent = String(pending);
   if (q("todoStatToday")) q("todoStatToday").textContent = String(stats.today);
@@ -402,8 +404,8 @@ function renderTodoList() {
       ).length;
       emptyHint =
         futurePending > 0
-          ? `今天没有“今天要做的”，但你还有 ${futurePending} 条未完成任务截止在未来（含节日/每周任务）。请切换到「待完成」或「全部」查看。`
-          : "今天没有待办。未来日期的任务请切换到「全部」或「待完成」查看。";
+          ? `今天没有截止在今天的任务；另有 ${futurePending} 条在未来，请切到「待完成」。`
+          : "今天没有截止在今天的任务；未来任务请选「待完成」。";
     }
     listEl.innerHTML = `<div class="todo-empty">${emptyHint}</div>`;
     return;
@@ -416,12 +418,12 @@ function renderTodoList() {
     const repeatText = `重复：${todoRepeatLabel(item.repeat || "none")}`;
     const editingCls =
       editingTodoId != null && Number(item.id) === editingTodoId ? " editing" : "";
+    const metaBits = `${dueText} · ${repeatText} · ${statusText} · 创建 ${escapeHtml(String(item.created_at || "").slice(0, 10))}`;
     return `
       <div class="todo-item ${item.done ? "done" : ""}${editingCls}">
         <input class="todo-check" type="checkbox" data-todo-toggle="${item.id}" ${item.done ? "checked" : ""} />
         <div class="todo-main">
-          <div class="todo-text">${escapeHtml(item.text || "")}</div>
-          <div class="todo-meta">${dueText} · ${repeatText} · 状态：${statusText} · 创建：${escapeHtml(String(item.created_at || "").slice(0, 10))}</div>
+          <span class="todo-line"><span class="todo-text">${escapeHtml(item.text || "")}</span><span class="todo-meta">${metaBits}</span></span>
         </div>
         <div class="todo-actions">
           <span class="todo-priority ${item.priority || "medium"}">${todoPriorityLabel(item.priority)}</span>

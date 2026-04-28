@@ -239,9 +239,6 @@ label{display:grid;gap:6px;color:#4b7662;font-size:12.5px}
 }
 .todo-stat-card span{font-size:11.5px;color:var(--muted)}
 .todo-stat-card strong{font-size:18px;color:#154a31;line-height:1}
-.todo-stats-line{
-  margin:2px 0 10px;
-}
 .todo-list{display:grid;gap:8px}
 .todo-empty{
   border:1px dashed var(--line);
@@ -253,32 +250,29 @@ label{display:grid;gap:6px;color:#4b7662;font-size:12.5px}
 }
 .todo-item{
   display:grid;
-  grid-template-columns:auto minmax(0,1fr);
-  grid-template-rows:auto auto;
-  gap:8px 10px;
-  align-items:flex-start;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:8px 12px;
+  align-items:center;
   border:1px solid var(--line);
   border-radius:12px;
-  padding:11px;
+  padding:10px 12px;
   background:linear-gradient(180deg,#ffffff 0%, #fbfffc 100%);
   box-shadow:0 2px 8px rgba(21,153,71,.06);
 }
 .todo-item .todo-check{
   grid-column:1;
-  grid-row:1;
-  margin-top:3px;
+  margin-top:0;
+  align-self:center;
 }
 .todo-item .todo-main{
   grid-column:2;
-  grid-row:1;
   min-width:0;
 }
 .todo-item .todo-actions{
-  grid-column:1 / -1;
-  grid-row:2;
-  width:100%;
+  grid-column:3;
   justify-content:flex-end;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
+  gap:6px;
 }
 .todo-item.done{
   opacity:.68;
@@ -289,10 +283,22 @@ label{display:grid;gap:6px;color:#4b7662;font-size:12.5px}
   box-shadow:0 0 0 2px rgba(19,122,69,.16);
   background:#f6fffa;
 }
-.todo-main{display:grid;gap:4px}
-.todo-text{font-size:13.5px;color:#184f35;word-break:break-word;line-height:1.35}
-.todo-item.done .todo-text{text-decoration:line-through}
-.todo-meta{font-size:12px;color:var(--muted)}
+.todo-main{min-width:0}
+.todo-line{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:0.15rem 0.45rem;
+  line-height:1.4;
+}
+.todo-text{
+  font-size:13.5px;
+  font-weight:600;
+  color:#184f35;
+  word-break:break-word;
+}
+.todo-item.done .todo-text{text-decoration:line-through;font-weight:500}
+.todo-meta{font-size:12px;color:var(--muted);font-weight:400}
 .todo-priority{
   display:inline-flex;
   align-items:center;
@@ -319,4 +325,17 @@ label{display:grid;gap:6px;color:#4b7662;font-size:12.5px}
   .todo-form{grid-template-columns:1fr}
   .todo-toolbar{flex-direction:column;align-items:stretch}
   .todo-stats-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .todo-item{
+    grid-template-columns:auto minmax(0,1fr);
+    grid-template-rows:auto auto;
+    align-items:flex-start;
+  }
+  .todo-item .todo-actions{
+    grid-column:1 / -1;
+    grid-row:2;
+    width:100%;
+    justify-content:flex-end;
+    flex-wrap:wrap;
+  }
+  .todo-item .todo-check{align-self:start;margin-top:2px}
 }

@@ -7,15 +7,15 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <script>window.__CRM_ASSET_V = "20260428j";</script>
-    <link rel="stylesheet" href="./styles.css?v=20260428j" />
+    <script>window.__CRM_ASSET_V = "20260428k";</script>
+    <link rel="stylesheet" href="./styles.css?v=20260428k" />
   </head>
   <body>
     <main class="wrap">
       <header class="header">
         <div>
           <h1>每日 To-Do</h1>
-          <p class="sub">默认显示全部未完成（含未来截止）；需要只看今天要做的可切到「今日待办」。</p>
+          <p class="sub">默认「今日待办」；节日与周任务在「待完成」。v20260428k</p>
         </div>
         <a id="crmNavBack" class="btn btn-secondary" href="./index.html">返回 CRM</a>
       </header>
@@ -23,8 +23,7 @@
       <section class="panel todo-panel">
         <div class="todo-headline">
           <h2>今日任务清单</h2>
-          <p class="sub">默认「待完成」含未来截止（节日提醒、每周任务等）；若选「今日待办」则只显示截止≤今天或未设截止。</p>
-          <p class="sub" style="opacity: 0.75">页面版本 20260428j（若此处不是该版本说明仍在用缓存，请 Ctrl+F5）</p>
+          <p class="sub">默认「今日待办」（截止≤今天或未设截止）；更多任务请选「待完成」。</p>
         </div>
         <form id="todoForm" class="todo-form">
           <input id="todoText" class="input" maxlength="160" placeholder="输入今天要完成的任务..." required />
@@ -49,9 +48,9 @@
 
         <div class="todo-toolbar">
           <select id="todoFilter" class="select">
-            <option value="today_do">今日待办</option>
+            <option value="today_do" selected>今日待办</option>
             <option value="all">全部</option>
-            <option value="pending" selected>待完成</option>
+            <option value="pending">待完成</option>
             <option value="today">今天到期</option>
             <option value="overdue">已逾期</option>
             <option value="done">已完成</option>
@@ -67,7 +66,6 @@
           <div class="todo-stat-card"><span>逾期</span><strong id="todoStatOverdue">0</strong></div>
           <div class="todo-stat-card"><span>完成</span><strong id="todoStatDone">0</strong></div>
         </div>
-        <div id="todoStats" class="sub todo-stats-line"></div>
         <div id="todoList" class="todo-list"></div>
       </section>
     </main>
@@ -78,6 +76,6 @@
         if (a) a.href = "./index.html?v=" + encodeURIComponent(window.__CRM_ASSET_V || "0");
       })();
     </script>
-    <script src="./todo.js?v=20260428j" defer></script>
+    <script src="./todo.js?v=20260428k" defer></script>
   </body>
  </html>
