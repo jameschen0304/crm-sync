@@ -39,9 +39,10 @@ function resolveApiUrl(path) {
   return `${base}${path}`;
 }
 
-/** 仅在没有配置远程 API 时走浏览器本地存根；配置了 crm_api_base 后必须始终请求网络，否则会永远看不到服务器最新数据 */
+/** 仅在没有配置远程 API 时走浏览器本地存根；已邮箱登录则必须走服务器，避免静默写本地导致刷新后“数据没了” */
 function useLocalApiStub() {
-  return USE_LOCAL_MODE && (!apiOrigin() || FORCE_LOCAL_FALLBACK);
+  if (hasCrmJwt()) return false;
+  return USE_LOCAL_MODE && !apiOrigin();
 }
 
 const WORK_START = "09:00";
@@ -79,6 +80,14 @@ const DAILY_SETTINGS_KEY = "crm_daily_settings";
 const LOCAL_DATA_KEY = "crm_companies_local_v1";
 let USE_LOCAL_MODE = window.location.protocol === "file:";
 let FORCE_LOCAL_FALLBACK = false;
+
+function hasCrmJwt() {
+  try {
+    return Boolean(localStorage.getItem(CRM_JWT_KEY));
+  } catch {
+    return false;
+  }
+}
 
 // 选择国家后自动填默认时区（IANA）
 // 说明：部分国家跨多个时区，这里填“最常用/首都时区”；你仍可手动改。
@@ -1268,7 +1277,7 @@ async function apiGet(path) {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   } catch (e) {
-    if (path === "/api/companies") {
+    if (path === "/api/companies" && !hasCrmJwt()) {
       USE_LOCAL_MODE = true;
       FORCE_LOCAL_FALLBACK = true;
       return localListCompanies();
@@ -1286,7 +1295,7 @@ async function apiPost(path, body) {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   } catch (e) {
-    if (path === "/api/companies") {
+    if (path === "/api/companies" && !hasCrmJwt()) {
       USE_LOCAL_MODE = true;
       FORCE_LOCAL_FALLBACK = true;
       return localCreateCompany(body);
@@ -1306,7 +1315,7 @@ async function apiPut(path, body) {
     return res.json();
   } catch (e) {
     const m = String(path).match(/^\/api\/companies\/(\d+)$/);
-    if (m) {
+    if (m && !hasCrmJwt()) {
       USE_LOCAL_MODE = true;
       FORCE_LOCAL_FALLBACK = true;
       return localUpdateCompany(Number(m[1]), body);
@@ -1326,7 +1335,7 @@ async function apiDelete(path) {
     return res.json();
   } catch (e) {
     const m = String(path).match(/^\/api\/companies\/(\d+)$/);
-    if (m) {
+    if (m && !hasCrmJwt()) {
       USE_LOCAL_MODE = true;
       FORCE_LOCAL_FALLBACK = true;
       return localDeleteCompany(Number(m[1]));
@@ -1554,6 +1563,7 @@ async function authRegister() {
     if (root) localStorage.setItem("crm_api_base", root);
     localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
     USE_LOCAL_MODE = false;
+    FORCE_LOCAL_FALLBACK = false;
     await refresh();
     setMsg("注册成功，已登录。", "ok");
   } catch (e) {
@@ -1583,6 +1593,7 @@ async function authLogin() {
     if (root) localStorage.setItem("crm_api_base", root);
     localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
     USE_LOCAL_MODE = false;
+    FORCE_LOCAL_FALLBACK = false;
     await refresh();
     setMsg("登录成功。", "ok");
   } catch (e) {
@@ -1597,6 +1608,7 @@ function authLogout() {
     /* ignore */
   }
   USE_LOCAL_MODE = true;
+  FORCE_LOCAL_FALLBACK = false;
   refresh();
   setMsg("已退出登录。", "ok");
 }
@@ -1606,6 +1618,13 @@ async function refresh() {
   if (hadRemote) USE_LOCAL_MODE = false;
   try {
     companies = await apiGet("/api/companies");
+    if (hasCrmJwt() && Array.isArray(companies)) {
+      try {
+        localSaveCompanies(companies);
+      } catch {
+        /* ignore */
+      }
+    }
     if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
     else setMsg("");
     renderList();
