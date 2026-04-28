@@ -355,7 +355,7 @@ function renderTodoList() {
   const listEl = q("todoList");
   const statsEl = q("todoStats");
   const todayStr = getTodayDateStr();
-  const filter = (q("todoFilter")?.value || "today_do").trim();
+  const filter = (q("todoFilter")?.value || "pending").trim();
 
   const stats = {
     total: todoItems.length,
@@ -385,10 +385,16 @@ function renderTodoList() {
   });
 
   if (!filtered.length) {
-    const emptyHint =
-      filter === "today_do"
-        ? "今天没有待办。未来日期的任务请切换到「全部」或「待完成」查看。"
-        : "暂无任务，先添加一条吧。";
+    let emptyHint = "暂无任务，先添加一条吧。";
+    if (filter === "today_do") {
+      const futurePending = todoItems.filter(
+        (x) => !x.done && x.due_date && x.due_date > todayStr
+      ).length;
+      emptyHint =
+        futurePending > 0
+          ? `今天没有“今天要做的”，但你还有 ${futurePending} 条未完成任务截止在未来（含节日/每周任务）。请切换到「待完成」或「全部」查看。`
+          : "今天没有待办。未来日期的任务请切换到「全部」或「待完成」查看。";
+    }
     listEl.innerHTML = `<div class="todo-empty">${emptyHint}</div>`;
     return;
   }
