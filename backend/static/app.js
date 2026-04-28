@@ -1545,6 +1545,46 @@ function initCloudSyncForm() {
   }
 }
 
+/** 将 FastAPI 等返回的 JSON 错误体转成面向用户的短句，避免整段 JSON 糊在界面上 */
+function parseApiErrorMessage(rawText, status) {
+  const t = String(rawText || "").trim();
+  if (!t) return status ? `请求失败（HTTP ${status}）` : "请求失败";
+  const byDetail = (detail) => {
+    if (detail == null) return "";
+    if (typeof detail === "string") {
+      const d = detail.trim();
+      const map = {
+        "Wrong email or password": "邮箱或密码错误，请检查后重试。",
+        "Invalid email": "邮箱格式无效。",
+        "Registration is disabled": "当前已关闭注册。",
+        "Email already registered": "该邮箱已注册，请直接登录。",
+        "Register storage error": "服务器存储异常，请稍后再试。",
+        "Register failed": "注册失败，请稍后再试。",
+        "Not logged in": "请先登录。",
+        "Invalid or expired token": "登录已失效，请重新登录。",
+        "User not found": "账号不存在或已被删除。",
+      };
+      if (map[d]) return map[d];
+      return d.length > 200 ? `${d.slice(0, 200)}…` : d;
+    }
+    if (Array.isArray(detail)) {
+      const parts = detail
+        .map((x) => (x && typeof x === "object" && x.msg ? String(x.msg) : null))
+        .filter(Boolean);
+      if (parts.length) return parts.join("；");
+    }
+    return "";
+  };
+  try {
+    const j = JSON.parse(t);
+    const fromDetail = byDetail(j.detail);
+    if (fromDetail) return fromDetail;
+  } catch {
+    /* 非 JSON，沿用原文 */
+  }
+  return t.length > 200 ? `${t.slice(0, 200)}…` : t;
+}
+
 async function authRegister() {
   const root = apiOrigin();
   const email = (q("crmLoginEmail")?.value || "").trim();
@@ -1564,7 +1604,7 @@ async function authRegister() {
       body: JSON.stringify({ email, password }),
     });
     const text = await res.text();
-    if (!res.ok) throw new Error(text || res.statusText);
+    if (!res.ok) throw new Error(parseApiErrorMessage(text, res.status));
     const data = JSON.parse(text);
     if (!data.access_token) throw new Error("无 token");
     localStorage.setItem(CRM_JWT_KEY, data.access_token);
@@ -1594,7 +1634,7 @@ async function authLogin() {
       body: JSON.stringify({ email, password }),
     });
     const text = await res.text();
-    if (!res.ok) throw new Error(text || res.statusText);
+    if (!res.ok) throw new Error(parseApiErrorMessage(text, res.status));
     const data = JSON.parse(text);
     if (!data.access_token) throw new Error("无 token");
     localStorage.setItem(CRM_JWT_KEY, data.access_token);
