@@ -1805,13 +1805,9 @@ async function refresh(opts = {}) {
       /not authenticated/i.test(raw) ||
       /detail"\s*:\s*"Invalid or expired token"/i.test(raw);
     if (unauthorized) {
-      try {
-        localStorage.removeItem(CRM_JWT_KEY);
-      } catch {
-        /* ignore */
-      }
+      // 刷新页时偶发 401 不应直接清空 token，避免“看起来被自动退出登录”
       FORCE_LOCAL_FALLBACK = false;
-      setMsg("登录已失效，请重新点击「登录」。", "error");
+      setMsg("登录状态校验失败，请先点「刷新」重试；若仍失败再重新登录。", "error");
     } else if (/Failed to fetch|NetworkError|Load failed/i.test(raw)) {
       setMsg("网络异常，请检查网络后点「刷新」；已登录时客户数据在服务器，不会丢。", "error");
     } else if (apiOrigin()) {
