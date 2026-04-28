@@ -329,6 +329,7 @@ class CompanyIn(BaseModel):
     monday_follow_up_history: Optional[str] = Field(default=None, max_length=8000)
     last_follow_up_channel: Optional[str] = Field(default=None, max_length=32)
     last_follow_up_note: Optional[str] = Field(default=None, max_length=2000)
+    follow_up_history: Optional[str] = Field(default=None, max_length=8000)
     last_won_raw: Optional[str] = Field(default=None, max_length=2000)
     last_won_time: Optional[datetime] = None
     last_won_product: Optional[str] = Field(default=None, max_length=255)
@@ -339,7 +340,6 @@ class CompanyIn(BaseModel):
 
 class CompanyOut(CompanyIn):
     id: int
-    follow_up_history: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

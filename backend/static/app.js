@@ -1540,6 +1540,7 @@ const COMPANY_CREATE_KEYS = [
   "monday_follow_up_history",
   "last_follow_up_channel",
   "last_follow_up_note",
+  "follow_up_history",
   "last_won_raw",
   "last_won_time",
   "last_won_product",
