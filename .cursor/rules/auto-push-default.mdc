@@ -1,0 +1,21 @@
+---
+description: After code changes, auto commit and push to GitHub; user should not need manual git
+alwaysApply: true
+---
+
+# Auto commit & push（推送到 GitHub）
+
+## 用户期望
+
+- 每次在对话里完成**代码或配置修改**后，由 Agent **自动**执行：`git add`（仅相关文件）→ `git commit` → `git push` 到 `origin/main`。
+- **不要**等用户再说「请推送」；用户**不必**自己在终端里反复执行推送命令。
+- 若用户明确说「先别推 / 只改不提交 / 等我 review」，则本回合不 push。
+
+## Agent behavior (English)
+
+- After completing requested code changes, run validation checks when possible.
+- If changes are valid, stage **only** files that belong to the task, create a commit, and push to `origin/main` by default.
+- Do not wait for an extra confirmation to push unless the user explicitly asks to review first or not to push.
+- If push fails (conflict/hook), resolve and continue until push succeeds.
+- Never use destructive git operations (`reset --hard`, force push) unless the user explicitly requests them.
+- If no files changed, do not create an empty commit.
