@@ -1521,6 +1521,83 @@ async function importLocalDataFromFile(file) {
   setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
 }
 
+/** 与后端 CompanyIn 一致，用于从本地/导入行创建云端客户 */
+const COMPANY_CREATE_KEYS = [
+  "country_code",
+  "region",
+  "linkedin_url",
+  "website_url",
+  "email",
+  "wechat",
+  "whatsapp",
+  "follow_up_stage",
+  "next_follow_up_at",
+  "last_follow_up_at",
+  "monday_routine_enabled",
+  "monday_next_follow_up_at",
+  "monday_last_follow_up_at",
+  "monday_last_follow_up_note",
+  "monday_follow_up_history",
+  "last_follow_up_channel",
+  "last_follow_up_note",
+  "last_won_raw",
+  "last_won_time",
+  "last_won_product",
+  "last_won_qty",
+  "last_won_unit_price",
+  "last_won_supplier",
+];
+
+function rowToCompanyCreatePayload(row) {
+  if (!row || typeof row !== "object") return null;
+  const name = String(row.name || "").trim();
+  const timezone = String(row.timezone || "").trim();
+  if (!name || !timezone) return null;
+  const out = { name, timezone };
+  for (const k of COMPANY_CREATE_KEYS) {
+    let v = row[k];
+    if (typeof v === "string") {
+      v = v.trim();
+      v = v === "" ? null : v;
+    }
+    if (v === undefined) v = null;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** 云端当前账号下还没有客户时，把本地缓存（含刚导入的）逐条 POST，避免登录后一览被空列表覆盖 */
+async function uploadLocalStashToServer(stash) {
+  let ok = 0;
+  let skip = 0;
+  let fail = 0;
+  for (const row of stash) {
+    const payload = rowToCompanyCreatePayload(row);
+    if (!payload) {
+      skip += 1;
+      continue;
+    }
+    try {
+      await apiPost("/api/companies", payload);
+      ok += 1;
+    } catch (e) {
+      const m = String(e?.message || e);
+      if (m.includes("409") || m.includes("already exists") || m.includes("Company name already exists")) skip += 1;
+      else fail += 1;
+    }
+  }
+  return { ok, skip, fail };
+}
+
+function formatLocalUploadReport(r) {
+  if (!r || (!r.ok && !r.skip && !r.fail)) return "";
+  const parts = [];
+  if (r.ok) parts.push(`已将 ${r.ok} 条本地客户同步到云端`);
+  if (r.skip) parts.push(`${r.skip} 条未上传（缺名称/时区或公司名与云端重名）`);
+  if (r.fail) parts.push(`${r.fail} 条上传失败`);
+  return parts.join("；");
+}
+
 function saveApiBaseSetting() {
   // API address is now fixed for email-login mode.
 }
@@ -1612,8 +1689,9 @@ async function authRegister() {
     localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
     USE_LOCAL_MODE = false;
     FORCE_LOCAL_FALLBACK = false;
-    await refresh();
-    setMsg("注册成功，已登录。", "ok");
+    const syncReport = await refresh({ afterAuth: true });
+    const tail = formatLocalUploadReport(syncReport);
+    setMsg(tail ? `注册成功，已登录。${tail}。` : "注册成功，已登录。", syncReport?.fail ? "error" : "ok");
   } catch (e) {
     setMsg(`注册失败：${String(e?.message || e)}`, "error");
   }
@@ -1642,8 +1720,9 @@ async function authLogin() {
     localStorage.setItem(CRM_LAST_EMAIL_KEY, email);
     USE_LOCAL_MODE = false;
     FORCE_LOCAL_FALLBACK = false;
-    await refresh();
-    setMsg("登录成功。", "ok");
+    const syncReport = await refresh({ afterAuth: true });
+    const tail = formatLocalUploadReport(syncReport);
+    setMsg(tail ? `登录成功。${tail}。` : "登录成功。", syncReport?.fail ? "error" : "ok");
   } catch (e) {
     setMsg(`登录失败：${String(e?.message || e)}`, "error");
   }
@@ -1661,24 +1740,57 @@ function authLogout() {
   setMsg("已退出登录。", "ok");
 }
 
-async function refresh() {
+async function refresh(opts = {}) {
+  const afterAuth = Boolean(opts.afterAuth);
   const hadRemote = Boolean(apiOrigin());
   if (hadRemote) USE_LOCAL_MODE = false;
+  let syncReport = null;
   try {
     companies = await apiGet("/api/companies");
     if (hasCrmJwt() && Array.isArray(companies)) {
-      try {
-        localSaveCompanies(companies);
-      } catch {
-        /* ignore */
+      if (companies.length === 0) {
+        const stash = localListCompanies();
+        if (stash.length > 0) {
+          syncReport = await uploadLocalStashToServer(stash);
+          companies = await apiGet("/api/companies");
+          if (companies.length === 0 && (!syncReport || syncReport.ok === 0)) {
+            companies = stash;
+            try {
+              localSaveCompanies(stash);
+            } catch {
+              /* ignore */
+            }
+          } else {
+            try {
+              localSaveCompanies(companies);
+            } catch {
+              /* ignore */
+            }
+          }
+        } else {
+          try {
+            localSaveCompanies(companies);
+          } catch {
+            /* ignore */
+          }
+        }
+      } else {
+        try {
+          localSaveCompanies(companies);
+        } catch {
+          /* ignore */
+        }
       }
     }
     if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
     else if (apiOrigin() && !hasCrmJwt()) {
       setMsg("请先点击「登录」，客户数据才会从云端加载并保存到服务器。", "ok");
-    } else setMsg("");
+    } else if (syncReport && !afterAuth) {
+      setMsg(`已同步：${formatLocalUploadReport(syncReport)}。`, syncReport.fail ? "error" : "ok");
+    } else if (!afterAuth) setMsg("");
     renderList();
     startReminderLoop(60000);
+    return syncReport;
   } catch (e) {
     // 无法连接后端时，自动切换离线 HTML 模式，方便在其他电脑直接使用
     USE_LOCAL_MODE = true;
@@ -1708,6 +1820,7 @@ async function refresh() {
     }
     renderList();
     startReminderLoop(60000);
+    return null;
   }
 }
 
