@@ -27,6 +27,10 @@ function apiOrigin() {
   try {
     const h = (window.location.hostname || "").toLowerCase();
     if (h.endsWith(".github.io")) return DEFAULT_REMOTE_API_BASE;
+    // 与 API 同域部署在 Render 时，用当前站点即可访问 /api（避免缓存里丢了 CRM_API_BASE）
+    if (h.endsWith(".onrender.com") && typeof window.location !== "undefined") {
+      return String(window.location.origin).replace(/\/$/, "");
+    }
   } catch {
     /* ignore */
   }
@@ -1272,6 +1276,10 @@ async function apiGet(path) {
     if (path === "/api/companies") return localListCompanies();
     throw new Error(`本地模式不支持 GET ${path}`);
   }
+  // 云端接口需登录；未带 JWT 时不要请求（否则 401 被当成“连不上服务器”）
+  if (path === "/api/companies" && apiOrigin() && !hasCrmJwt()) {
+    return localListCompanies();
+  }
   try {
     const res = await fetch(resolveApiUrl(path), { headers: apiHeaders() });
     if (!res.ok) throw new Error(await res.text());
@@ -1626,7 +1634,9 @@ async function refresh() {
       }
     }
     if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
-    else setMsg("");
+    else if (apiOrigin() && !hasCrmJwt()) {
+      setMsg("请先点击「登录」，客户数据才会从云端加载并保存到服务器。", "ok");
+    } else setMsg("");
     renderList();
     startReminderLoop(60000);
   } catch (e) {
@@ -1634,8 +1644,28 @@ async function refresh() {
     USE_LOCAL_MODE = true;
     migrateLocalFollowUpDefaults();
     companies = localListCompanies();
-    if (apiOrigin()) setMsg("未连接到服务器，请检查 API 地址或登录状态。", "error");
-    else setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
+    const raw = String(e?.message || e);
+    const unauthorized =
+      /401/.test(raw) ||
+      /Unauthorized/i.test(raw) ||
+      /Invalid or expired token/i.test(raw) ||
+      /not authenticated/i.test(raw) ||
+      /detail"\s*:\s*"Invalid or expired token"/i.test(raw);
+    if (unauthorized) {
+      try {
+        localStorage.removeItem(CRM_JWT_KEY);
+      } catch {
+        /* ignore */
+      }
+      FORCE_LOCAL_FALLBACK = false;
+      setMsg("登录已失效，请重新点击「登录」。", "error");
+    } else if (/Failed to fetch|NetworkError|Load failed/i.test(raw)) {
+      setMsg("网络异常，请检查网络后点「刷新」；已登录时客户数据在服务器，不会丢。", "error");
+    } else if (apiOrigin()) {
+      setMsg(`暂时无法连接服务器：${raw.slice(0, 160)}`, "error");
+    } else {
+      setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
+    }
     renderList();
     startReminderLoop(60000);
   }
