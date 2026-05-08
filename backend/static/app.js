@@ -467,6 +467,7 @@ const prevWorking = new Map();
 let listViewMode = "detailed";
 const expandedRegions = new Set();
 let currentDetailId = null;
+let listEventsBound = false;
 
 function loadDailySettings() {
   try {
@@ -1081,70 +1082,112 @@ function renderList() {
   el.innerHTML = html;
   el.classList.toggle("compact", listViewMode === "compact");
 
-  el.querySelectorAll("[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = Number(btn.getAttribute("data-edit"));
-      const c = companies.find((x) => x.id === id);
-      if (!c) return;
-      q("id").value = String(c.id);
-      q("name").value = c.name || "";
-      q("timezone").value = c.timezone || "";
-      q("country_code").value = c.country_code || "";
-      q("region").value = c.region || "";
-      q("linkedin_url").value = c.linkedin_url || "";
-      q("website_url").value = c.website_url || "";
-      q("email").value = c.email || "";
-      q("wechat").value = c.wechat || "";
-      q("whatsapp").value = c.whatsapp || "";
-      q("follow_up_stage").value = c.follow_up_stage || "新线索";
-      q("next_follow_up_at").value = toDatetimeLocalValue(c.next_follow_up_at);
-      q("last_follow_up_at").value = toDatetimeLocalValue(c.last_follow_up_at);
-      q("monday_routine_enabled").value = c.monday_routine_enabled || "";
-      q("monday_next_follow_up_at").value = toDatetimeLocalValue(c.monday_next_follow_up_at);
-      q("monday_last_follow_up_at").value = toDatetimeLocalValue(c.monday_last_follow_up_at);
-      q("monday_last_follow_up_note").value = c.monday_last_follow_up_note || "";
-      q("last_follow_up_channel").value = c.last_follow_up_channel || "";
-      q("last_follow_up_note").value = c.last_follow_up_note || "";
-      q("last_won_raw").value = c.last_won_raw || "";
-      q("last_won_time").value = toDatetimeLocalValue(c.last_won_time);
-      q("last_won_product").value = c.last_won_product || "";
-      q("last_won_qty").value = c.last_won_qty || "";
-      q("last_won_unit_price").value = c.last_won_unit_price || "";
-      q("last_won_supplier").value = c.last_won_supplier || "";
+  // 保持右侧详情和当前选中客户同步
+  if (currentDetailId) {
+    const selected = companies.find((x) => x.id === currentDetailId);
+    if (selected) renderDetail(selected);
+    else {
       currentDetailId = null;
       renderEmptyDetail();
-      setMsg("已载入可编辑。", "ok");
-      const editPanel = q("editPanel");
-      editPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-      editPanel.classList.add("panel-focus");
-      setTimeout(() => editPanel.classList.remove("panel-focus"), 1400);
-    });
-  });
+    }
+  } else {
+    renderEmptyDetail();
+  }
+}
 
-  el.querySelectorAll("[data-open-detail]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = Number(btn.getAttribute("data-open-detail"));
+function fillEditFormByCompany(c) {
+  q("id").value = String(c.id);
+  q("name").value = c.name || "";
+  q("timezone").value = c.timezone || "";
+  q("country_code").value = c.country_code || "";
+  q("region").value = c.region || "";
+  q("linkedin_url").value = c.linkedin_url || "";
+  q("website_url").value = c.website_url || "";
+  q("email").value = c.email || "";
+  q("wechat").value = c.wechat || "";
+  q("whatsapp").value = c.whatsapp || "";
+  q("follow_up_stage").value = c.follow_up_stage || "新线索";
+  q("next_follow_up_at").value = toDatetimeLocalValue(c.next_follow_up_at);
+  q("last_follow_up_at").value = toDatetimeLocalValue(c.last_follow_up_at);
+  q("monday_routine_enabled").value = c.monday_routine_enabled || "";
+  q("monday_next_follow_up_at").value = toDatetimeLocalValue(c.monday_next_follow_up_at);
+  q("monday_last_follow_up_at").value = toDatetimeLocalValue(c.monday_last_follow_up_at);
+  q("monday_last_follow_up_note").value = c.monday_last_follow_up_note || "";
+  q("last_follow_up_channel").value = c.last_follow_up_channel || "";
+  q("last_follow_up_note").value = c.last_follow_up_note || "";
+  q("last_won_raw").value = c.last_won_raw || "";
+  q("last_won_time").value = toDatetimeLocalValue(c.last_won_time);
+  q("last_won_product").value = c.last_won_product || "";
+  q("last_won_qty").value = c.last_won_qty || "";
+  q("last_won_unit_price").value = c.last_won_unit_price || "";
+  q("last_won_supplier").value = c.last_won_supplier || "";
+  currentDetailId = null;
+  renderEmptyDetail();
+  setMsg("已载入可编辑。", "ok");
+  const editPanel = q("editPanel");
+  editPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  editPanel.classList.add("panel-focus");
+  setTimeout(() => editPanel.classList.remove("panel-focus"), 1400);
+}
+
+function bindListEventsOnce() {
+  if (listEventsBound) return;
+  const el = q("list");
+  if (!el) return;
+  el.addEventListener("click", async (ev) => {
+    const target = ev.target;
+    if (!(target instanceof Element)) return;
+
+    const openBtn = target.closest("[data-open-detail]");
+    if (openBtn) {
+      const id = Number(openBtn.getAttribute("data-open-detail"));
       const c = companies.find((x) => x.id === id);
       if (!c) return;
       currentDetailId = id;
       renderDetail(c);
-    });
-  });
+      return;
+    }
 
-  el.querySelectorAll("[data-del]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = Number(btn.getAttribute("data-del"));
+    const regionBtn = target.closest("[data-region-toggle]");
+    if (regionBtn) {
+      const region = regionBtn.getAttribute("data-region-toggle");
+      if (!region) return;
+      if (expandedRegions.has(region)) expandedRegions.delete(region);
+      else expandedRegions.add(region);
+      renderList();
+      return;
+    }
+
+    const editBtn = target.closest("[data-edit]");
+    if (editBtn) {
+      const id = Number(editBtn.getAttribute("data-edit"));
+      const c = companies.find((x) => x.id === id);
+      if (!c) return;
+      fillEditFormByCompany(c);
+      return;
+    }
+
+    const delBtn = target.closest("[data-del]");
+    if (delBtn) {
+      if (delBtn.dataset.busy === "1") return;
+      const id = Number(delBtn.getAttribute("data-del"));
       const c = companies.find((x) => x.id === id);
       if (!c) return;
       if (!confirm(`确认删除：${c.name}？`)) return;
-      await apiDelete(`/api/companies/${id}`);
-      await refresh();
-    });
-  });
+      delBtn.dataset.busy = "1";
+      try {
+        await apiDelete(`/api/companies/${id}`);
+        await refresh();
+      } finally {
+        delete delBtn.dataset.busy;
+      }
+      return;
+    }
 
-  el.querySelectorAll("[data-follow]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = Number(btn.getAttribute("data-follow"));
+    const followBtn = target.closest("[data-follow]");
+    if (followBtn) {
+      if (followBtn.dataset.busy === "1") return;
+      const id = Number(followBtn.getAttribute("data-follow"));
       const c = companies.find((x) => x.id === id);
       if (!c) return;
       const nextStage = stageAfterFollowUpRecord(c.follow_up_stage);
@@ -1155,6 +1198,7 @@ function renderList() {
       if (note === null) return;
       const nowIso = new Date().toISOString();
       const nextIso = computeNextFollowUpISO(nextStage, new Date());
+      followBtn.dataset.busy = "1";
       try {
         await apiPut(`/api/companies/${id}`, {
           ...c,
@@ -1168,30 +1212,34 @@ function renderList() {
         await refresh();
       } catch (e) {
         setMsg(`记录跟进失败：${String(e?.message || e)}`, "error");
+      } finally {
+        delete followBtn.dataset.busy;
       }
-    });
-  });
+      return;
+    }
 
-  el.querySelectorAll("[data-monday-follow]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = Number(btn.getAttribute("data-monday-follow"));
+    const mondayBtn = target.closest("[data-monday-follow]");
+    if (mondayBtn) {
+      if (mondayBtn.dataset.busy === "1") return;
+      const id = Number(mondayBtn.getAttribute("data-monday-follow"));
       const c = companies.find((x) => x.id === id);
       if (!c) return;
-      if (!String(c.whatsapp || "").trim() && !String(c.wechat || "").trim()) {
-        setMsg(`客户 ${c.name} 未填写微信或 WhatsApp，已取消周一例行。`, "error");
-        await apiPut(`/api/companies/${id}`, {
-          ...c,
-          monday_routine_enabled: null,
-          monday_next_follow_up_at: null,
-        });
-        await refresh();
-        return;
-      }
-      const note = prompt("周一例行备注：", c.monday_last_follow_up_note || "发行业研视频");
-      if (note === null) return;
-      const nowIso = new Date().toISOString();
-      const nextIso = computeNextMondayISO(new Date());
+      mondayBtn.dataset.busy = "1";
       try {
+        if (!String(c.whatsapp || "").trim() && !String(c.wechat || "").trim()) {
+          setMsg(`客户 ${c.name} 未填写微信或 WhatsApp，已取消周一例行。`, "error");
+          await apiPut(`/api/companies/${id}`, {
+            ...c,
+            monday_routine_enabled: null,
+            monday_next_follow_up_at: null,
+          });
+          await refresh();
+          return;
+        }
+        const note = prompt("周一例行备注：", c.monday_last_follow_up_note || "发行业研视频");
+        if (note === null) return;
+        const nowIso = new Date().toISOString();
+        const nextIso = computeNextMondayISO(new Date());
         await apiPut(`/api/companies/${id}`, {
           ...c,
           monday_routine_enabled: "1",
@@ -1203,31 +1251,12 @@ function renderList() {
         await refresh();
       } catch (e) {
         setMsg(`记录周一例行失败：${String(e?.message || e)}`, "error");
+      } finally {
+        delete mondayBtn.dataset.busy;
       }
-    });
-  });
-
-  el.querySelectorAll("[data-region-toggle]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const region = btn.getAttribute("data-region-toggle");
-      if (!region) return;
-      if (expandedRegions.has(region)) expandedRegions.delete(region);
-      else expandedRegions.add(region);
-      renderList();
-    });
-  });
-
-  // 保持右侧详情和当前选中客户同步
-  if (currentDetailId) {
-    const selected = companies.find((x) => x.id === currentDetailId);
-    if (selected) renderDetail(selected);
-    else {
-      currentDetailId = null;
-      renderEmptyDetail();
     }
-  } else {
-    renderEmptyDetail();
-  }
+  });
+  listEventsBound = true;
 }
 
 function renderDetail(c) {
@@ -1976,6 +2005,7 @@ q("companyForm").addEventListener("submit", async (ev) => {
 
 initCountrySelect();
 initTimezoneDatalist();
+bindListEventsOnce();
 q("country_code").addEventListener("change", trySetTimezoneFromCountry);
 q("follow_up_stage").addEventListener("change", () => {
   const stage = q("follow_up_stage").value;
