@@ -1141,7 +1141,7 @@ function bindListEventsOnce() {
     const openBtn = target.closest("[data-open-detail]");
     if (openBtn) {
       const id = Number(openBtn.getAttribute("data-open-detail"));
-      const c = companies.find((x) => x.id === id);
+      const c = companies.find((x) => Number(x.id) === id);
       if (!c) return;
       currentDetailId = id;
       renderDetail(c);
@@ -1161,7 +1161,7 @@ function bindListEventsOnce() {
     const editBtn = target.closest("[data-edit]");
     if (editBtn) {
       const id = Number(editBtn.getAttribute("data-edit"));
-      const c = companies.find((x) => x.id === id);
+      const c = companies.find((x) => Number(x.id) === id);
       if (!c) return;
       fillEditFormByCompany(c);
       return;
@@ -1171,13 +1171,19 @@ function bindListEventsOnce() {
     if (delBtn) {
       if (delBtn.dataset.busy === "1") return;
       const id = Number(delBtn.getAttribute("data-del"));
-      const c = companies.find((x) => x.id === id);
-      if (!c) return;
+      const c = companies.find((x) => Number(x.id) === id);
+      if (!c) {
+        setMsg("找不到该客户，请点「刷新」后再试。", "error");
+        return;
+      }
       if (!confirm(`确认删除：${c.name}？`)) return;
       delBtn.dataset.busy = "1";
       try {
         await apiDelete(`/api/companies/${id}`);
         await refresh();
+        setMsg(`已删除：${c.name}`, "ok");
+      } catch (e) {
+        setMsg(`删除失败：${String(e?.message || e)}`, "error");
       } finally {
         delete delBtn.dataset.busy;
       }
@@ -1188,7 +1194,7 @@ function bindListEventsOnce() {
     if (followBtn) {
       if (followBtn.dataset.busy === "1") return;
       const id = Number(followBtn.getAttribute("data-follow"));
-      const c = companies.find((x) => x.id === id);
+      const c = companies.find((x) => Number(x.id) === id);
       if (!c) return;
       const nextStage = stageAfterFollowUpRecord(c.follow_up_stage);
       const channel = askFollowUpChannel(c.last_follow_up_channel || "");
@@ -1222,7 +1228,7 @@ function bindListEventsOnce() {
     if (mondayBtn) {
       if (mondayBtn.dataset.busy === "1") return;
       const id = Number(mondayBtn.getAttribute("data-monday-follow"));
-      const c = companies.find((x) => x.id === id);
+      const c = companies.find((x) => Number(x.id) === id);
       if (!c) return;
       mondayBtn.dataset.busy = "1";
       try {
@@ -1546,8 +1552,25 @@ async function importLocalDataFromFile(file) {
   localSaveCompanies(normalized);
   migrateLocalFollowUpDefaults();
   companies = localListCompanies();
+  let syncReport = null;
+  if (apiOrigin() && hasCrmJwt()) {
+    try {
+      const remote = await apiGet("/api/companies");
+      syncReport = await uploadLocalStashMissingOnServer(remote, companies);
+      companies = await apiGet("/api/companies");
+      localSaveCompanies(companies);
+    } catch (e) {
+      renderList();
+      setMsg(`导入已写入本机，但同步到云端失败：${String(e?.message || e)}`, "error");
+      return;
+    }
+  }
   renderList();
-  setMsg(`导入完成，共 ${normalized.length} 条客户。`, "ok");
+  const tail = syncReport ? formatLocalUploadReport(syncReport) : "";
+  setMsg(
+    tail ? `导入完成，共 ${normalized.length} 条客户。${tail}。` : `导入完成，共 ${normalized.length} 条客户。`,
+    syncReport?.fail ? "error" : "ok",
+  );
 }
 
 /** 与后端 CompanyIn 一致，用于从本地/导入行创建云端客户 */
@@ -1823,7 +1846,10 @@ async function refresh(opts = {}) {
     companies = await apiGet("/api/companies");
     if (hasCrmJwt() && Array.isArray(companies)) {
       const stash = localListCompanies();
-      if (stash.length > 0) {
+      // 仅在「刚登录/注册」或「云端仍为空」时把本地 stash 补传到服务器，避免每次 refresh 把已在云端删除的客户又从旧缓存里 POST 回来
+      const shouldMergeStash =
+        stash.length > 0 && (afterAuth || companies.length === 0);
+      if (shouldMergeStash) {
         syncReport = await uploadLocalStashMissingOnServer(companies, stash);
         if (syncReport && syncReport.ok > 0) {
           companies = await apiGet("/api/companies");
