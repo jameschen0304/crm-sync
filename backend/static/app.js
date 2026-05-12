@@ -1596,12 +1596,29 @@ function rowToCompanyCreatePayload(row) {
   return out;
 }
 
-/** 云端当前账号下还没有客户时，把本地缓存（含刚导入的）逐条 POST，避免登录后一览被空列表覆盖 */
-async function uploadLocalStashToServer(stash) {
+/**
+ * 把本地缓存里「云端尚无同名公司」的条目逐条 POST。
+ * remoteSnapshot 为空时等价于整库上传；非空时只补全缺失，避免登录后云端已有少量数据时覆盖掉刚导入的本地客户。
+ */
+async function uploadLocalStashMissingOnServer(remoteSnapshot, stash) {
+  const names = new Set(
+    (Array.isArray(remoteSnapshot) ? remoteSnapshot : [])
+      .map((c) => String(c?.name || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
   let ok = 0;
   let skip = 0;
   let fail = 0;
   for (const row of stash) {
+    const key = String(row?.name || "").trim().toLowerCase();
+    if (!key) {
+      skip += 1;
+      continue;
+    }
+    if (names.has(key)) {
+      skip += 1;
+      continue;
+    }
     const payload = rowToCompanyCreatePayload(row);
     if (!payload) {
       skip += 1;
@@ -1610,10 +1627,13 @@ async function uploadLocalStashToServer(stash) {
     try {
       await apiPost("/api/companies", payload);
       ok += 1;
+      names.add(key);
     } catch (e) {
       const m = String(e?.message || e);
-      if (m.includes("409") || m.includes("already exists") || m.includes("Company name already exists")) skip += 1;
-      else fail += 1;
+      if (m.includes("409") || m.includes("already exists") || m.includes("Company name already exists")) {
+        skip += 1;
+        names.add(key);
+      } else fail += 1;
     }
   }
   return { ok, skip, fail };
@@ -1802,38 +1822,22 @@ async function refresh(opts = {}) {
   try {
     companies = await apiGet("/api/companies");
     if (hasCrmJwt() && Array.isArray(companies)) {
-      if (companies.length === 0) {
-        const stash = localListCompanies();
-        if (stash.length > 0) {
-          syncReport = await uploadLocalStashToServer(stash);
+      const stash = localListCompanies();
+      if (stash.length > 0) {
+        syncReport = await uploadLocalStashMissingOnServer(companies, stash);
+        if (syncReport && syncReport.ok > 0) {
           companies = await apiGet("/api/companies");
-          if (companies.length === 0 && (!syncReport || syncReport.ok === 0)) {
-            companies = stash;
-            try {
-              localSaveCompanies(stash);
-            } catch {
-              /* ignore */
-            }
-          } else {
-            try {
-              localSaveCompanies(companies);
-            } catch {
-              /* ignore */
-            }
-          }
-        } else {
-          try {
-            localSaveCompanies(companies);
-          } catch {
-            /* ignore */
-          }
         }
-      } else {
-        try {
-          localSaveCompanies(companies);
-        } catch {
-          /* ignore */
+      }
+      if (companies.length === 0 && stash.length > 0) {
+        if (!syncReport || syncReport.ok === 0) {
+          companies = stash;
         }
+      }
+      try {
+        localSaveCompanies(companies);
+      } catch {
+        /* ignore */
       }
     }
     if (useLocalApiStub()) setMsg("当前为离线 HTML 模式：数据保存在本机浏览器。", "ok");
