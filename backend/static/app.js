@@ -1526,8 +1526,7 @@ function exportCurrentData() {
   exportLocalData();
 }
 
-async function importLocalDataFromFile(file) {
-  const text = await file.text();
+function parseImportedJsonText(text) {
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -1546,7 +1545,13 @@ async function importLocalDataFromFile(file) {
       throw new Error("JSON 格式不正确");
     }
   }
-  const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
+  return parsed;
+}
+
+const BUNDLED_BACKUP_URL = "./crm-recovered-data.json";
+
+async function applyImportedRows(rows, opts = {}) {
+  const label = opts.label || "导入";
   const normalized = normalizeImportedRows(rows);
   if (!normalized.length) throw new Error("文件中没有可导入的数据");
   localSaveCompanies(normalized);
@@ -1561,16 +1566,34 @@ async function importLocalDataFromFile(file) {
       localSaveCompanies(companies);
     } catch (e) {
       renderList();
-      setMsg(`导入已写入本机，但同步到云端失败：${String(e?.message || e)}`, "error");
+      setMsg(`${label}已写入本机，但同步到云端失败：${String(e?.message || e)}`, "error");
       return;
     }
   }
   renderList();
   const tail = syncReport ? formatLocalUploadReport(syncReport) : "";
   setMsg(
-    tail ? `导入完成，共 ${normalized.length} 条客户。${tail}。` : `导入完成，共 ${normalized.length} 条客户。`,
+    tail ? `${label}完成，共 ${normalized.length} 条客户。${tail}。` : `${label}完成，共 ${normalized.length} 条客户。`,
     syncReport?.fail ? "error" : "ok",
   );
+}
+
+async function importLocalDataFromFile(file) {
+  const text = await file.text();
+  const parsed = parseImportedJsonText(text);
+  const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
+  await applyImportedRows(rows, { label: "导入" });
+}
+
+/** 从内置备份 crm-recovered-data.json 恢复客户（本地 + 已登录时同步到云端） */
+async function restoreBundledBackup(opts = {}) {
+  const skipConfirm = Boolean(opts.skipConfirm);
+  if (!skipConfirm && !confirm("确认从内置备份恢复客户数据？不会覆盖云端已有同名公司。")) return;
+  const res = await fetch(BUNDLED_BACKUP_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error(`无法读取备份文件（HTTP ${res.status}）`);
+  const parsed = parseImportedJsonText(await res.text());
+  const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
+  await applyImportedRows(rows, { label: "恢复" });
 }
 
 /** 与后端 CompanyIn 一致，用于从本地/导入行创建云端客户 */
@@ -1921,6 +1944,9 @@ bindClick("btnAuthLogout", () => {
 bindClick("btnSaveApiBase", saveApiBaseSetting);
 bindClick("btnExportData", exportCurrentData);
 bindClick("btnImportData", () => q("importDataFile").click());
+bindClick("btnRestoreBackup", () => {
+  void restoreBundledBackup().catch((e) => setMsg(`恢复失败：${String(e?.message || e)}`, "error"));
+});
 q("importDataFile").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
   ev.target.value = "";
@@ -2112,17 +2138,18 @@ q("btnDetailEdit").addEventListener("click", () => {
   if (editBtn) editBtn.click();
 });
 initCloudSyncForm();
-try {
-  const CLEAR_FLAG = "crm_customer_clear_20260427_done";
-  if (localStorage.getItem(CLEAR_FLAG) !== "1") {
-    localSaveCompanies([]);
-    localStorage.setItem(CLEAR_FLAG, "1");
-  }
-} catch {
-  /* ignore */
-}
 async function bootApp() {
   await verifySessionOnStartup();
   await refresh();
+  if (!companies.length) {
+    try {
+      const res = await fetch(BUNDLED_BACKUP_URL, { method: "HEAD", cache: "no-store" });
+      if (res.ok && confirm("当前没有客户数据。是否从内置备份恢复 14 条客户？")) {
+        await restoreBundledBackup({ skipConfirm: true });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 }
 void bootApp();
