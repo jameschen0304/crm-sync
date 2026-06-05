@@ -1331,6 +1331,9 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   if (useLocalApiStub()) {
     if (path === "/api/companies") return localCreateCompany(body);
+    if (path === "/api/companies/restore-bundled") {
+      throw new Error("请先登录后再恢复备份到云端");
+    }
     throw new Error(`本地模式不支持 POST ${path}`);
   }
   try {
@@ -1562,18 +1565,22 @@ async function applyImportedRows(rows, opts = {}) {
     try {
       const remote = await apiGet("/api/companies");
       syncReport = await uploadLocalStashMissingOnServer(remote, companies);
-      companies = await apiGet("/api/companies");
+      const remoteAfter = await apiGet("/api/companies");
+      if (remoteAfter.length > 0) {
+        companies = remoteAfter;
+      }
+      // 云端仍为空时保留本机刚导入的数据，避免被空列表覆盖
       localSaveCompanies(companies);
     } catch (e) {
       renderList();
-      setMsg(`${label}已写入本机，但同步到云端失败：${String(e?.message || e)}`, "error");
+      setMsg(`${label}已写入本机（${companies.length} 条），但同步到云端失败：${String(e?.message || e)}`, "error");
       return;
     }
   }
   renderList();
   const tail = syncReport ? formatLocalUploadReport(syncReport) : "";
   setMsg(
-    tail ? `${label}完成，共 ${normalized.length} 条客户。${tail}。` : `${label}完成，共 ${normalized.length} 条客户。`,
+    tail ? `${label}完成，共 ${companies.length} 条客户。${tail}。` : `${label}完成，共 ${companies.length} 条客户。`,
     syncReport?.fail ? "error" : "ok",
   );
 }
@@ -1589,6 +1596,19 @@ async function importLocalDataFromFile(file) {
 async function restoreBundledBackup(opts = {}) {
   const skipConfirm = Boolean(opts.skipConfirm);
   if (!skipConfirm && !confirm("确认从内置备份恢复客户数据？不会覆盖云端已有同名公司。")) return;
+  if (apiOrigin() && hasCrmJwt()) {
+    try {
+      const report = await apiPost("/api/companies/restore-bundled", {});
+      await refresh({ afterAuth: true });
+      const tail = formatLocalUploadReport(report);
+      setMsg(tail ? `恢复完成。${tail}。` : `恢复完成，共 ${companies.length} 条客户。`, report?.fail ? "error" : "ok");
+      return;
+    } catch (e) {
+      const m = String(e?.message || e);
+      if (!/404|Not Found|restore-bundled/i.test(m)) throw e;
+      // 服务器尚未部署新接口时，退回浏览器本地恢复
+    }
+  }
   const res = await fetch(BUNDLED_BACKUP_URL, { cache: "no-store" });
   if (!res.ok) throw new Error(`无法读取备份文件（HTTP ${res.status}）`);
   const parsed = parseImportedJsonText(await res.text());
@@ -1624,10 +1644,41 @@ const COMPANY_CREATE_KEYS = [
   "last_won_supplier",
 ];
 
+const COMPANY_FIELD_MAX = {
+  country_code: 2,
+  region: 16,
+  linkedin_url: 512,
+  website_url: 512,
+  email: 255,
+  wechat: 128,
+  whatsapp: 64,
+  follow_up_stage: 32,
+  monday_routine_enabled: 8,
+  monday_last_follow_up_note: 2000,
+  monday_follow_up_history: 8000,
+  last_follow_up_channel: 32,
+  last_follow_up_note: 2000,
+  follow_up_history: 8000,
+  last_won_raw: 2000,
+  last_won_product: 255,
+  last_won_qty: 64,
+  last_won_unit_price: 128,
+  last_won_supplier: 255,
+};
+
+function truncateCompanyField(key, value) {
+  if (value == null) return null;
+  let v = typeof value === "string" ? value.trim() : value;
+  if (v === "") return null;
+  const max = COMPANY_FIELD_MAX[key];
+  if (max && typeof v === "string" && v.length > max) v = v.slice(0, max);
+  return v;
+}
+
 function rowToCompanyCreatePayload(row) {
   if (!row || typeof row !== "object") return null;
-  const name = String(row.name || "").trim();
-  const timezone = String(row.timezone || "").trim();
+  const name = String(row.name || "").trim().slice(0, 255);
+  const timezone = String(row.timezone || "").trim().slice(0, 64);
   if (!name || !timezone) return null;
   const out = { name, timezone };
   for (const k of COMPANY_CREATE_KEYS) {
@@ -1637,7 +1688,7 @@ function rowToCompanyCreatePayload(row) {
       v = v === "" ? null : v;
     }
     if (v === undefined) v = null;
-    out[k] = v;
+    out[k] = truncateCompanyField(k, v);
   }
   return out;
 }
@@ -2143,12 +2194,9 @@ async function bootApp() {
   await refresh();
   if (!companies.length) {
     try {
-      const res = await fetch(BUNDLED_BACKUP_URL, { method: "HEAD", cache: "no-store" });
-      if (res.ok && confirm("当前没有客户数据。是否从内置备份恢复 14 条客户？")) {
-        await restoreBundledBackup({ skipConfirm: true });
-      }
-    } catch {
-      /* ignore */
+      await restoreBundledBackup({ skipConfirm: true });
+    } catch (e) {
+      setMsg(`自动恢复失败：${String(e?.message || e)}。请点「恢复备份(14条)」或先登录后再试。`, "error");
     }
   }
 }
