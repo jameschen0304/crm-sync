@@ -1,9 +1,8 @@
-import json
 import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -176,44 +175,6 @@ def compute_next_monday_at(from_dt: datetime) -> datetime:
     if delta == 0:
         delta = 7
     return from_dt + timedelta(days=delta)
-
-
-BUNDLED_BACKUP_PATH = Path(__file__).parent / "static" / "crm-recovered-data.json"
-
-# 与 CompanyIn 各字符串字段 max_length 一致，恢复备份时先截断避免 422
-_COMPANY_STR_MAX: dict[str, int] = {
-    "name": 255,
-    "timezone": 64,
-    "country_code": 2,
-    "region": 16,
-    "linkedin_url": 512,
-    "website_url": 512,
-    "email": 255,
-    "wechat": 128,
-    "whatsapp": 64,
-    "follow_up_stage": 32,
-    "monday_routine_enabled": 8,
-    "monday_last_follow_up_note": 2000,
-    "monday_follow_up_history": 8000,
-    "last_follow_up_channel": 32,
-    "last_follow_up_note": 2000,
-    "follow_up_history": 8000,
-    "last_won_raw": 2000,
-    "last_won_product": 255,
-    "last_won_qty": 64,
-    "last_won_unit_price": 128,
-    "last_won_supplier": 255,
-}
-
-
-def _truncate_company_strings(data: dict[str, Any]) -> dict[str, Any]:
-    out = dict(data)
-    for key, max_len in _COMPANY_STR_MAX.items():
-        if key not in out or out[key] is None:
-            continue
-        s = str(out[key]).strip()
-        out[key] = s[:max_len] if len(s) > max_len else (s or None)
-    return out
 
 
 def _normalize_monday_routine_fields(data: dict) -> dict:
@@ -551,56 +512,3 @@ def delete_company(company_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return {"ok": True}
-
-
-@app.post("/api/companies/restore-bundled", dependencies=[Depends(get_current_user)])
-def restore_bundled_companies(db: Session = Depends(get_db)) -> dict[str, int]:
-    """从 static/crm-recovered-data.json 恢复客户（按公司名去重，不覆盖已有）。"""
-    if not BUNDLED_BACKUP_PATH.is_file():
-        raise HTTPException(status_code=404, detail="Bundled backup not found")
-    try:
-        raw = json.loads(BUNDLED_BACKUP_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        raise HTTPException(status_code=500, detail=f"Invalid bundled backup: {e}") from e
-    rows = raw if isinstance(raw, list) else raw.get("rows", [])
-    if not isinstance(rows, list):
-        raise HTTPException(status_code=500, detail="Bundled backup has no rows")
-
-    existing_names = {
-        (r.name or "").strip().lower()
-        for r in db.scalars(select(Company)).all()
-        if (r.name or "").strip()
-    }
-    inserted = 0
-    skipped = 0
-    failed = 0
-    company_keys = set(CompanyIn.model_fields.keys())
-    for item in rows:
-        if not isinstance(item, dict):
-            skipped += 1
-            continue
-        name = str(item.get("name") or "").strip()
-        timezone = str(item.get("timezone") or "").strip()
-        if not name or not timezone:
-            skipped += 1
-            continue
-        key = name.lower()
-        if key in existing_names:
-            skipped += 1
-            continue
-        payload_raw = {k: item.get(k) for k in company_keys if k in item}
-        payload_raw["name"] = name
-        payload_raw["timezone"] = timezone
-        try:
-            payload = CompanyIn.model_validate(_truncate_company_strings(payload_raw))
-            data = _normalize_monday_routine_fields(payload.model_dump())
-            row = Company(**data)
-            db.add(row)
-            db.commit()
-            db.refresh(row)
-            existing_names.add(key)
-            inserted += 1
-        except Exception:
-            db.rollback()
-            failed += 1
-    return {"ok": inserted, "skip": skipped, "fail": failed}

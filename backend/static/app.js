@@ -1331,9 +1331,6 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   if (useLocalApiStub()) {
     if (path === "/api/companies") return localCreateCompany(body);
-    if (path === "/api/companies/restore-bundled") {
-      throw new Error("请先登录后再恢复备份到云端");
-    }
     throw new Error(`本地模式不支持 POST ${path}`);
   }
   try {
@@ -1551,8 +1548,6 @@ function parseImportedJsonText(text) {
   return parsed;
 }
 
-const BUNDLED_BACKUP_URL = "./crm-recovered-data.json";
-
 async function applyImportedRows(rows, opts = {}) {
   const label = opts.label || "导入";
   const normalized = normalizeImportedRows(rows);
@@ -1590,30 +1585,6 @@ async function importLocalDataFromFile(file) {
   const parsed = parseImportedJsonText(text);
   const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
   await applyImportedRows(rows, { label: "导入" });
-}
-
-/** 从内置备份 crm-recovered-data.json 恢复客户（本地 + 已登录时同步到云端） */
-async function restoreBundledBackup(opts = {}) {
-  const skipConfirm = Boolean(opts.skipConfirm);
-  if (!skipConfirm && !confirm("确认从内置备份恢复客户数据？不会覆盖云端已有同名公司。")) return;
-  if (apiOrigin() && hasCrmJwt()) {
-    try {
-      const report = await apiPost("/api/companies/restore-bundled", {});
-      await refresh({ afterAuth: true });
-      const tail = formatLocalUploadReport(report);
-      setMsg(tail ? `恢复完成。${tail}。` : `恢复完成，共 ${companies.length} 条客户。`, report?.fail ? "error" : "ok");
-      return;
-    } catch (e) {
-      const m = String(e?.message || e);
-      if (!/404|Not Found|restore-bundled/i.test(m)) throw e;
-      // 服务器尚未部署新接口时，退回浏览器本地恢复
-    }
-  }
-  const res = await fetch(BUNDLED_BACKUP_URL, { cache: "no-store" });
-  if (!res.ok) throw new Error(`无法读取备份文件（HTTP ${res.status}）`);
-  const parsed = parseImportedJsonText(await res.text());
-  const rows = Array.isArray(parsed) ? parsed : parsed?.rows;
-  await applyImportedRows(rows, { label: "恢复" });
 }
 
 /** 与后端 CompanyIn 一致，用于从本地/导入行创建云端客户 */
@@ -1995,9 +1966,6 @@ bindClick("btnAuthLogout", () => {
 bindClick("btnSaveApiBase", saveApiBaseSetting);
 bindClick("btnExportData", exportCurrentData);
 bindClick("btnImportData", () => q("importDataFile").click());
-bindClick("btnRestoreBackup", () => {
-  void restoreBundledBackup().catch((e) => setMsg(`恢复失败：${String(e?.message || e)}`, "error"));
-});
 q("importDataFile").addEventListener("change", async (ev) => {
   const file = ev.target.files?.[0];
   ev.target.value = "";
@@ -2192,12 +2160,5 @@ initCloudSyncForm();
 async function bootApp() {
   await verifySessionOnStartup();
   await refresh();
-  if (!companies.length) {
-    try {
-      await restoreBundledBackup({ skipConfirm: true });
-    } catch (e) {
-      setMsg(`自动恢复失败：${String(e?.message || e)}。请点「恢复备份(14条)」或先登录后再试。`, "error");
-    }
-  }
 }
 void bootApp();
